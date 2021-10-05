@@ -8,7 +8,7 @@ The operation of sustainable energy systems requires accurate probabilistic fore
 
 ## Forecast examples
 
-The following figures contain four day ahead forecasts by the Kalman Filter, KD-IC and DeepAR model with weather input (W) for a time series consisting of 56 aggregated smart meters. The gray points are the actual observations, the solid line denotes the median forecast and the areas around the line denote the 50% and 90% confidence intervals.
+The following figures contain four day ahead forecasts by the Kalman Filter (KF), KD-IC and DeepAR model with weather input (W) for a time series consisting of 56 aggregated smart meters. The gray points are the actual observations, the solid line denotes the median forecast and the areas around the line denote the 50% and 90% confidence intervals.
 
 ![Kalman Filter](forecast_examples/KF_W.png)
 
@@ -20,7 +20,7 @@ The following figures contain four day ahead forecasts by the Kalman Filter, KD-
 
 The code in this repository is written for our own preprocessed version of the smart meter data from London households [[3]](#3). Therefore, this repository does not provide ready-to-use generic code for probabilistic energy forecasting. It is rather meant as supplementary material to my master thesis. 
 
-However, if you want to reuse the models or evaluation scripts for your own project, the minimal requirements for executing scripts are listed in `requirements.txt`. Everything is written using Python 3.7.9.
+However, if you want to reuse the models or evaluation scripts for your own project, the minimal requirements for executing scripts are listed in `requirements.txt`. Everything is written in Python 3.7.9.
 
 ## Project structure
 
@@ -41,7 +41,7 @@ However, if you want to reuse the models or evaluation scripts for your own proj
 ├── main.py  # Main script that reads the data, fits the models and computes forecasts
 ├── models  # Contains the different forecasting models
 │   ├── deep_ar.py  # DeepAR
-│   ├── forecast_model.py  # Abstract superclass
+│   ├── forecast_model.py  # Abstract superclass for the probabilistic forecasting models
 │   ├── kalman_filter.py  # HWT Exponential smoothing and the Kalman Filter
 │   ├── kd_ic.py  # KD-IC
 │   ├── last_week.py  # Naive last week benchmark
@@ -55,8 +55,7 @@ However, if you want to reuse the models or evaluation scripts for your own proj
 
 <a id="2">[2]</a> Haben, S. and Giasemidis, G. (2016). “A hybrid model of kernel density estimation and quantile regression for GEFCom2014 probabilistic load forecasting”. In: International Journal of Forecasting 32.3, pp. 1017–1022.
 
-<a id="3">[3]</a> Kaggle (2019). Smart meters in London. url: https://www.kaggle.com/jeanmidev/smart-
-meters-in-london (visited on 04/30/2021).
+<a id="3">[3]</a> Kaggle (2019). Smart meters in London. url: https://www.kaggle.com/jeanmidev/smart-meters-in-london (visited on 04/30/2021).
 
 <a id="4">[4]</a> Salinas, D., Flunkert, V., Gasthaus, J., and Januschowski, T. (2020). “DeepAR: Probabilistic forecasting with autoregressive recurrent networks”. In: International Journal of Forecasting 36.3, pp. 1181–1191.
 
