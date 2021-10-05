@@ -10,6 +10,10 @@ import utils
 
 
 class KalmanFilter(ForecastModel, LogNormal):
+    """
+    Implements the probabilistic forecasting model based on double-seasonal HWT Exponential Smoothing (Taylor, 2010)
+    that estimates parameters and creates forecasts in closed form using the linear Kalman Filter (Särkkä, 2013).
+    """
     def __init__(self, y, t, u=None, ID='', exp_smooth_fit=False, num_filter_weeks=52):
         super().__init__(y, t, u, ID)
 
@@ -70,6 +74,10 @@ class KalmanFilter(ForecastModel, LogNormal):
         return 'KalmanFilter'
 
     def fA(self, X, theta, transpose=False):
+        """
+        Computes the matrix-matrix (AX) or matrix-vector (Ax) multiplication of A and X efficiently. This is possible
+        since A is a sparse matrix. If transpose=True XA^T is computed.
+        """
         # Transition matrix
         res = np.empty_like(X)
 
@@ -101,6 +109,9 @@ class KalmanFilter(ForecastModel, LogNormal):
         return res
 
     def fh(self, X, theta, u=None):
+        """
+        Computes the matrix-vector multiplication (Xh) or the inner product (h^T * x) efficiently.
+        """
         # Measurement model matrix
         if X.ndim == 1:
             res = (1 - theta[0] - theta[1] - theta[2]) * X[0] + X[1] + X[2] + X[2 + self.s_d]
@@ -113,6 +124,9 @@ class KalmanFilter(ForecastModel, LogNormal):
         return res
 
     def initialize_mean(self, y, u=None):
+        """
+        Initializes the level, daily, weekly and weather component of the mean vector.
+        """
         # Use first 3 weeks of data for initialization
         y_init = np.log(y[:3 * self.s_w])
 
@@ -135,7 +149,12 @@ class KalmanFilter(ForecastModel, LogNormal):
         return np.hstack((e0, l0, np.flip(d0), np.flip(w0), b0))
 
     def filter(self, theta, t, u=None, y=None, timer=False):
-
+        """
+        Implements the Kalman Filter prediction and update steps for the timestamps t. Additionally, the
+        marginal likelihood estimate (MLE) for the parameters theta is computed in the filter recursion. The
+        function returns the distribution parameter estimates mu_y and sigma^2_y for the timestamps t,
+        the state vector m and covariance matrix P from the last iteration and the MLE.
+        """
         start_time = time.time()
 
         # Initialize
@@ -181,7 +200,10 @@ class KalmanFilter(ForecastModel, LogNormal):
         return mu_y, sigma2_y, m, P, mle
 
     def exp_smooth(self, theta, t, u=None, y=None, timer=False):
-
+        """
+        Implements exponential smoothing for the timestamps t, which provides a fast way to estimate the parameters
+        theta via MLE. However, the Kalman Filter provides better parameter estimates.
+        """
         start_time = time.time()
 
         # Initialize
@@ -218,6 +240,10 @@ class KalmanFilter(ForecastModel, LogNormal):
         return mle, eps
 
     def fit(self):
+        """
+        Fits the parameters of the Kalman Filter model by minimizing the Gaussian negative log likelihood
+        with the non-linear optimizer L-BFGS-B.
+        """
         super().fit()
         start_time = time.time()
 
@@ -264,11 +290,17 @@ class KalmanFilter(ForecastModel, LogNormal):
         self.results[0]['fit_time'] = time.time() - start_time
 
     def add_measurements(self, y, t, u=None):
+        """
+        Updates the state of the Kalman Filter after measurements are added.
+        """
         super().add_measurements(y, t, u)
 
         _, _, self.m, self.P, self.mle = self.filter(self.theta, t, u, y)
 
     def predict(self, t, u=None):
+        """
+        Predicts the forecast distribution parameters for the timestamps t, optionally given covariates u.
+        """
         if super().predict(t, u):
             return
         start_time = time.time()

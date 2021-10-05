@@ -11,6 +11,10 @@ import utils
 
 
 class LogNormalIC(ForecastModel, LogNormal):
+    """
+    Implements a parametric variant of the non-parametric probabilistic forecasting model called
+    KD-IC (Arora et. al., 2016). The forecasts distributions are log-normal.
+    """
     def __init__(self, y, t, u=None, ID='', window_size=16):
         super().__init__(y, t, u, ID)
 
@@ -42,13 +46,20 @@ class LogNormalIC(ForecastModel, LogNormal):
 
     @staticmethod
     def get_day_type(t):
-        # Mo - Fr: 0, Sa: 1, So: 2
+        """
+        Returns the day-type of the timestamp(s) t, which is 0 for the weekdays (Mo-Fr), 1 for Saturday and
+        2 for Sunday.
+        """
         if isinstance(t, dt.datetime):
             return 0 if t.weekday() < 5 else t.weekday() - 4
         else:
             return np.array([0 if tstp.weekday() < 5 else tstp.weekday() - 4 for tstp in t])
 
     def get_previous_idx(self, t, origin_idx):
+        """
+        Returns all relevant previous indices needed for the forecast of timestamps t, together with a mask,
+        indicating which days correspond to the same day-type.
+        """
         idx = self.idx(t, relative=False)[:, np.newaxis]
         dist_to_origin = idx - origin_idx
 
@@ -65,6 +76,9 @@ class LogNormalIC(ForecastModel, LogNormal):
 
     @staticmethod
     def k(delta, h=1., kernel_type='triangular'):
+        """
+        Implements the PDFs for various kernels with bandwidth h.
+        """
         if kernel_type == 'gaussian':
             # Gaussian kernel
             return 1 / np.sqrt(2 * np.pi * h ** 2) * np.exp(-0.5 * delta ** 2 / h ** 2)
@@ -76,6 +90,12 @@ class LogNormalIC(ForecastModel, LogNormal):
             return 1 / h * np.maximum(1 - np.abs(delta / h), 1e-6)
 
     def max_likelihood_prediction(self, theta, t, u=None, y=None):
+        """
+        Computes the distribution parameters at the timestamps t, by maximizing the likelihood using
+        the Log-Normal-IC method. Optionally, the computation of the maximum likelihood is conditioned
+        on the input u. The function returns the marginal likelihood estimate (MLE) for the timestamps t
+        if the true observations y are known, which can be used for estimation of the parameters theta.
+        """
         mu_y = np.zeros(len(t))
         sigma2_y = np.zeros(len(t))
         mle = 0
@@ -105,7 +125,10 @@ class LogNormalIC(ForecastModel, LogNormal):
         return mu_y, sigma2_y, mle
 
     def objective(self, theta, val_periods=4, timer=True):
-
+        """
+        Defines the objective which can be used for parameter optimization. Here, the objective is to minimize
+        the MLE in the four weeks prior to the forecast range.
+        """
         start_time = time.time()
         mle = 0
 
@@ -123,6 +146,10 @@ class LogNormalIC(ForecastModel, LogNormal):
         return mle
 
     def fit(self):
+        """
+        Fit the parameters of the Log-Normal-IC model by minimizing the objective via the non-linear
+        optimizer L-BFGS-B.
+        """
         super().fit()
         start_time = time.time()
 
@@ -150,6 +177,10 @@ class LogNormalIC(ForecastModel, LogNormal):
         self.day_type_t = np.hstack([self.day_type_t, self.get_day_type(t)])
 
     def predict(self, t, u=None):
+        """
+        Predicts the forecast distribution parameters for the timestamps t,
+        optionally given covariates u.
+        """
         if super().predict(t, u):
             return
         start_time = time.time()

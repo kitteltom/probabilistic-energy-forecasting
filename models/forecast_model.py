@@ -12,6 +12,10 @@ OUT_PATH = './out/'
 
 
 class ForecastModel(ABC):
+    """
+    Abstract superclass of all probabilistic forecasting models.
+    """
+
     @abstractmethod
     def __init__(self, y, t, u=None, ID='', seed=0, global_model=False):
         self.seed = seed
@@ -89,6 +93,10 @@ class ForecastModel(ABC):
         pass
 
     def idx(self, t, relative=True):
+        """
+        Returns the index/indices of the timestamp(s) t. Either with respect to the first forecast timestamp
+        (relative=True) or with respect to the timestamp t_0 (relative=False).
+        """
         if isinstance(t, dt.datetime):
             return int((t - (self.t_f if relative else self.t[0])).total_seconds() / (60 * 30))
         else:
@@ -98,19 +106,32 @@ class ForecastModel(ABC):
 
     @abstractmethod
     def fit(self):
+        """
+        Abstract method (to be implemented by subclasses) that fits the model parameters to the data.
+        """
         pass
 
     def validate_timestamps(self, t):
+        """
+        Validates whether predictions are available for the timestamps t.
+        """
         if t[0] < self.t_f or t[-1] > self.t_l:
             raise ValueError('No prediction available for the timestamps t.')
 
     def validate_input(self, u):
+        """
+        Validates whether the input u is consistently missing or consistently not missing.
+        """
         if self.u is None and u is not None:
             raise ValueError('No initial input u available.')
         if self.u is not None and u is None:
             raise ValueError('Missing input u.')
 
     def add_measurements(self, y, t, u=None):
+        """
+        Appends measurements y (and optionally covariates u) for the timestamps t. Note that the timestamps t
+        must be subsequent to the timestamps self.t.
+        """
         if t[0] != self.t[-1] + dt.timedelta(minutes=30):
             raise ValueError('No subsequent measurements.')
 
@@ -128,6 +149,11 @@ class ForecastModel(ABC):
 
     @abstractmethod
     def predict(self, t, u=None):
+        """
+        Abstract method (to be implemented by subclasses) that predicts the distribution of observations y for
+        the timestamps t, optionally given covariates u. Note that the prediction has to start right after the
+        last measurement and that forecasts must be subsequent.
+        """
         if t[0] >= self.t_f and t[-1] <= self.t_l:
             # Prediction already available
             return True
@@ -146,60 +172,114 @@ class ForecastModel(ABC):
 
     @abstractmethod
     def get_mean(self, t):
+        """
+        Abstract method (to be implemented by subclasses) that returns the mean forecasts for the timestamps t.
+        """
         self.validate_timestamps(t)
 
     @abstractmethod
     def get_var(self, t):
+        """
+        Abstract method (to be implemented by subclasses) that returns the variance forecasts for the timestamps t.
+        """
         self.validate_timestamps(t)
 
     @abstractmethod
     def get_percentile(self, p, t):
+        """
+        Abstract method (to be implemented by subclasses) that returns the p-percentile forecasts for the timestamps t.
+        """
         self.validate_timestamps(t)
 
     def get_median(self, t):
+        """
+        Returns the median forecasts for the timestamps t.
+        """
         return self.get_percentile(50, t)
 
     @abstractmethod
     def get_pit(self, y_true, t):
+        """
+        Abstract method (to be implemented by subclasses) that returns the Probability Integral Transform (PIT)
+        for the timestamps t, given the true observations y_true.
+        """
         self.validate_timestamps(t)
 
     @abstractmethod
     def get_crps(self, y_true, t):
+        """
+        Abstract method (to be implemented by subclasses) that returns the Continuous Ranked Probability Score (CRPS)
+        for the timestamps t, given the true observations y_true.
+        """
         self.validate_timestamps(t)
 
     def mcrps(self, y_true, t):
+        """
+        Computes the mean CRPS for the timestamps t.
+        """
         return np.nanmean(self.get_crps(y_true, t), axis=0)
 
     def rcrps(self, y_true, t):
+        """
+        Computes the relative CRPS for the timestamps t.
+        """
         return 100 * self.mcrps(y_true, t) / self.y_mean
 
     def ae(self, y_true, t):
+        """
+        Computes the absolute error for the timestamps t. Note that the median forecast is used as a point estimate.
+        """
         return np.abs(y_true - self.get_median(t))
 
     def mae(self, y_true, t):
+        """
+        Computes the Mean Absolute Error (MAE) for the timestamps t.
+        """
         return np.nanmean(self.ae(y_true, t), axis=0)
 
     def mase(self, y_true, t):
+        """
+        Computes the Mean Absolute Scaled Error (MASE) for the timestamps t.
+        """
         mae = self.mae(y_true, t)
         return mae / np.nanmean(np.abs(y_true[1:] - y_true[:-1]), axis=0)
 
     def mape(self, y_true, t):
+        """
+        Computes the Mean Absolute Percentage Error (MAPE) for the timestamps t.
+        """
         ape = 100 * self.ae(y_true, t) / y_true
         return np.nanmean(ape, axis=0)
 
     def rmae(self, y_true, t):
+        """
+        Computes the relative Mean Absolute Error (rMAE) for the timestamps t.
+        """
         return 100 * self.mae(y_true, t) / self.y_mean
 
     def se(self, y_true, t):
+        """
+        Computes the squared error for the timestamps t. Note that the mean forecast is used as a point estimate.
+        """
         return (y_true - self.get_mean(t)) ** 2
 
     def rmse(self, y_true, t):
+        """
+        Computes the Root Mean Squared Error (RMSE) for the timestamps t.
+        """
         return np.sqrt(np.nanmean(self.se(y_true, t), axis=0))
 
     def rrmse(self, y_true, t):
+        """
+        Computes the relative Root Mean Squared Error (rRMSE) for the timestamps t.
+        """
         return 100 * self.rmse(y_true, t) / self.y_mean
 
     def evaluate(self, y_true, t):
+        """
+        Evaluates all metrics for the true observations y_true and the timestamps t and
+        saves the results to a dictionary.
+        """
         mean = self.get_mean(t)
         var = self.get_var(t)
         p_05 = self.get_percentile(5, t)
@@ -264,18 +344,29 @@ class ForecastModel(ABC):
             self.results[i]['rRMSE'].append(rrmse[i])
 
     def get_out_dir(self):
+        """
+        Returns the directory where results will be saved to.
+        """
         out_dir = os.path.join(OUT_PATH, self.__str__())
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         return out_dir
 
     def save_results(self):
+        """
+        Saves the evaluation results as a JSON file to the directory specified by get_out_dir().
+        """
         out_dir = self.get_out_dir()
         for i in range(self.n):
             with open(os.path.join(out_dir, self.results[i]['ID'] + '.json'), 'w') as fp:
                 json.dump(utils.round_floats(self.results[i]), fp)
 
     def plot_forecast(self, y_true, t, plot_median=True, plot_percentiles=True, save_fig=False):
+        """
+        Plots the median forecasts, the 50% confidence intervals and the 90% confidence intervals along with
+        the true observations y_true for the timestamps t. If plot_median=False the mean forecast will be plotted.
+        If plot_percentiles=False no confidence intervals are shown.
+        """
         median = self.get_median(t)
         mean = self.get_mean(t)
         p_25 = self.get_percentile(25, t)

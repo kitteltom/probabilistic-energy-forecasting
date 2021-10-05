@@ -9,7 +9,7 @@ from models.log_normal_ic import LogNormalIC
 from models.deep_ar import DeepAR
 from models.last_week import LastWeek
 
-DATA_PATH = '~/data/smart_meters_london_refactored/'
+DATA_PATH = './data/smart_meters_london_refactored/'
 TRAIN_WEEKS = 52
 VAL_WEEKS = 16
 TEST_WEEKS = 16

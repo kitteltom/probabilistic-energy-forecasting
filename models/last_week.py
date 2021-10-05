@@ -5,6 +5,9 @@ from models.forecast_model import ForecastModel
 
 
 class LastWeek(ForecastModel):
+    """
+    Implements a naive benchmark that uses the observations from the previous week as a point forecast.
+    """
     def __init__(self, y, t, u=None, ID=''):
         super().__init__(y, t, u, ID)
 
@@ -17,6 +20,9 @@ class LastWeek(ForecastModel):
         super().fit()
 
     def predict(self, t, u=None):
+        """
+        Predicts the observation at timestamp(s) t by taking the observations(s) from the previous week.
+        """
         if super().predict(t, u):
             return
         start_time = time.time()

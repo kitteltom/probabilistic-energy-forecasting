@@ -5,8 +5,8 @@ import json
 import os
 import datetime as dt
 
-import data_analysis
 import main
+from eval import data_analysis
 
 # LaTeX settings
 plt.rc('text', usetex=True)
@@ -14,8 +14,8 @@ plt.rc('font', **{'family': 'serif', 'sans-serif': ['lmodern'], 'size': 18})
 plt.rc('axes', **{'titlesize': 18, 'labelsize': 18})
 
 # Constants
-JSON_PATH = '~/out/'
-OUT_PATH = '~/out/'
+JSON_PATH = './out/'
+OUT_PATH = './out/'
 MODEL_NAMES = {
     'KF': ('KalmanFilter', ''),
     'KF(+W)': ('KalmanFilter', '_W'),

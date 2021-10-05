@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 import utils
 import main
-import evaluation
+from eval import evaluation
 
 # LaTeX settings
 plt.rc('text', usetex=True)
@@ -15,8 +15,8 @@ plt.rc('font', **{'family': 'serif', 'sans-serif': ['lmodern'], 'size': 18})
 plt.rc('axes', **{'titlesize': 18, 'labelsize': 18})
 
 # Constants
-DATA_PATH = '~/data/smart_meters_london_refactored/'
-OUT_PATH = '~/out/'
+DATA_PATH = './data/smart_meters_london_refactored/'
+OUT_PATH = './out/'
 WEATHER_VARIABLE_NAMES = {
     'temperature': 'Temperature [°C]',
     'dew_point': 'Dew point [°C]',

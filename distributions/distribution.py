@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 class Distribution(ABC):
     """
-    Abstract superclass for the different probability distributions used by the forecast models.
+    Abstract superclass for the different probability distributions used by the forecasting models.
     """
 
     @staticmethod

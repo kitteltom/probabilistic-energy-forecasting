@@ -14,6 +14,9 @@ import utils
 
 
 class DeepAR(nn.Module, ForecastModel, Empirical):
+    """
+    Implements the global probabilistic forecasting model called DeepAR (Salinas et. al., 2020).
+    """
     def __init__(
             self, y, t, u=None, ID='', seed=0,
             prediction_length=192,
@@ -89,6 +92,10 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return f'DeepAR{self.seed}'
 
     def forward(self, X, h=None):
+        """
+        Forward function of the RNN. Includes an embedding, a LSTM and two separate affine output layers for the
+        distribution parameters.
+        """
         embeds = self.embedding(X[:, :, -1].int())
         X = torch.cat([X[:, :, :-1], embeds], dim=2)
         lstm_out, h = self.lstm(X, h)
@@ -96,6 +103,10 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return self.mu_fn(lstm_out), self.sigma2_fn(lstm_out), h
 
     def create_features(self, t, u=None, fit=False):
+        """
+        Creates a standardized feature vector consisting of time features and optionally covariates u.
+        Note that fit must be set to True during training.
+        """
         seconds = t.map(dt.datetime.timestamp).to_numpy(float)
 
         day = 24 * 60 * 60
@@ -122,10 +133,17 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return self.tensor(X)
 
     def create_labels(self, y):
+        """
+        Creates rescaled log observations as labels for training.
+        """
         y = utils.interpolate_nans(y)
         return self.tensor(np.log(y / self.y_mean).T[..., np.newaxis])
 
     def create_input(self, t, u=None, y_lags=(), categories=None, fit=False, samples=False):
+        """
+        Creates the input vector for the RNN consisting of time features, covariates, lagged log observations
+        and time series dependent categorical features.
+        """
         X = self.create_features(t, u, fit=fit)
 
         if samples:
@@ -145,6 +163,9 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return X
 
     def to_sequence(self, x):
+        """
+        Creates training sequences of length self.seq_len by reshaping the array of input vectors x.
+        """
         num_seq_per_series = (x.shape[1] - self.seq_len + self.seq_delta) // self.seq_delta
         seq = torch.zeros(self.n, num_seq_per_series, self.seq_len, x.shape[2])
         for i in range(num_seq_per_series):
@@ -153,13 +174,22 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
 
     @staticmethod
     def tensor(x):
+        """
+        Numpy array -> torch tensor.
+        """
         return torch.from_numpy(x).float()
 
     @staticmethod
     def numpy(x):
+        """
+        Torch tensor -> numpy array.
+        """
         return x.cpu().detach().numpy().astype(float).squeeze()
 
     def train_val_split(self):
+        """
+        Splits the data into 20% validation and 80% training set for early stopping.
+        """
         split = int((len(self.t) * 0.2) // self.seq_delta) * self.seq_delta
         y_train, y_val = self.y[split:], self.y[:split]
         t_train, t_val = self.t[split:], self.t[:split]
@@ -171,6 +201,10 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return y_train, y_val, t_train, t_val, u_train, u_val
 
     def get_data_loader(self, y, t, u, fit=False):
+        """
+        Returns a data loader for the observations y, timestamps t and covariates u. The functions creates
+        labels and input vectors, transforms them to sequences and then converts them into a TensorDataset.
+        """
         y = self.create_labels(y)
         y_lags = []
         for lag in self.lags_seq:
@@ -191,6 +225,10 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return DataLoader(data, batch_size=self.batch_size, shuffle=fit)
 
     def fit(self):
+        """
+        Trains the DeepAR model using backprop with the ADAM optimizer and Gaussian negative log likelihood loss.
+        Performs early stopping by evaluating the loss on the validation set.
+        """
         super().fit()
         start_time = time.time()
 
@@ -242,6 +280,9 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
             self.results[i]['val_loss'] = val_loss.tolist()
 
     def val(self, val_dataloader):
+        """
+        Computes the validation loss.
+        """
         # Eval mode
         self.eval()
         val_loss = 0
@@ -257,6 +298,11 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return val_loss / len(val_dataloader)
 
     def sample_per_sample(self, h, y, t, u):
+        """
+        Computes forecast sample paths by recursively sampling from a Gaussian distribution with the forecast
+        distribution parameters. Here, sample paths are generated for all time series in parallel. Sample path
+        after sample path.
+        """
         prediction_length = len(t)
         samples_y = np.zeros((self.num_samples, prediction_length, self.n))
 
@@ -289,6 +335,11 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return samples_y
 
     def sample_per_time_series(self, h, y, t, u):
+        """
+        Computes forecast sample paths by recursively sampling from a Gaussian distribution with the forecast
+        distribution parameters. Here, the different sample paths are generated in parallel. Time series after
+        time series.
+        """
         prediction_length = len(t)
         samples_y = np.zeros((self.num_samples, prediction_length, self.n))
 
@@ -322,6 +373,10 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
         return samples_y
 
     def predict(self, t, u=None):
+        """
+        Predicts the distribution of observations y by recursively computing sample paths for the timestamps t,
+        optionally given covariates u.
+        """
         if super().predict(t, u):
             return
         start_time = time.time()
