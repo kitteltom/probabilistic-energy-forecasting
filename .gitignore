@@ -4,3 +4,6 @@ __pycache__/
 
 shell_scripts/
 sketch_book.ipynb
+forecast_examples/KalmanFilter/
+forecast_examples/KD-IC/
+forecast_examples/DeepAR/
