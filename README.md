@@ -2,6 +2,14 @@
 
 This repository contains the python code for my master thesis with the title: "Hierarchical probabilistic forecasting of smart meter time series using weather input". 
 
+### Table of contents
+
+- [Abstract](#abstract)
+- [Probabilistic forecasting examples](#probabilistic-forecasting-examples)
+- [How to use](#how-to-use)
+- [Project structure](#project-structure)
+- [References](#references)
+
 ## Abstract
 
 The operation of sustainable energy systems requires accurate probabilistic forecasts of electricity demand on various hierarchy levels in the energy system — ranging from individual households to cities and entire countries. Weather variables, such as temperature and dew point, are strongly correlated with electricity demand on higher levels in the hierarchy (e.g. city level) but seem to have little effect on lower levels (e.g. household level). Therefore, in this thesis, we investigate at which point in the hierarchy — constructed of 2500 individual smart meter time series from London households — weather input is beneficial to four day ahead forecasts of electricity demand. More specifically, we separately analyze the influence of actual weather data and weather forecasts. To that end, we implement three probabilistic forecasting models from the literature and, if necessary, adjust the models to optionally utilize weather data. The first model is based on double seasonal Holt-Winters-Taylor Exponential Smoothing [[6]](#6), it computes forecasts with the Kalman Filter [[5]](#5) in closed form and can include weather variables through mean adjustments. The second model, called KD-IC [[1]](#1), uses Kernel Density Estimation to create non-parametric density forecasts and can be conditioned on temperature through a kernel [[2]](#2). The third model is an autoregressive Recurrent Neural Network (DeepAR [[4]](#4)) that optionally takes weather variables as network input and generates probabilistic forecasts by recursively computing sample paths. Our results indicate that actual weather data improves the forecasting performance of the Kalman Filter and DeepAR models on most hierarchy levels. In particular, our evaluation shows a strong correlation, of the score difference between the models without weather input and with actual weather input, and the number of aggregated smart meters. Nevertheless, weather forecast input rarely leads to competitive forecasting performance and is in many cases even detrimental to the electricity forecast.
