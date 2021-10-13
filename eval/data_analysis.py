@@ -15,7 +15,7 @@ plt.rc('font', **{'family': 'serif', 'sans-serif': ['lmodern'], 'size': 18})
 plt.rc('axes', **{'titlesize': 18, 'labelsize': 18})
 
 # Constants
-DATA_PATH = './data/smart_meters_london_refactored/'
+DATA_PATH = './data/'
 OUT_PATH = './out/'
 WEATHER_VARIABLE_NAMES = {
     'temperature': 'Temperature [°C]',
