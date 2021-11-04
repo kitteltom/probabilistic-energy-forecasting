@@ -147,7 +147,7 @@ def daily(x, reduce=False):
 
 
 def rmae(y_true, y_hat, axis=1):
-    return 100 * np.nanmean(np.abs(y_true - y_hat), axis=axis) / np.nanmean(np.abs(y_true))
+    return 100 * np.nanmean(np.abs(y_true - y_hat), axis=axis) / np.nanmean(y_true)
 
 
 def create_weather_forecast_df(
