@@ -6,7 +6,7 @@ import os
 import datetime as dt
 
 import main
-from eval import data_analysis
+from eval_scripts import data_analysis
 
 # LaTeX settings
 plt.rc('text', usetex=True)

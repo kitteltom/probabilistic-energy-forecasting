@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 import utils
 import main
-from eval import evaluation
+from eval_scripts import model_eval
 
 # LaTeX settings
 plt.rc('text', usetex=True)
@@ -174,7 +174,7 @@ def create_weather_forecast_df(
                 weather_forecast_df.iloc[w, h] += (' (%%.%sf)' % DECIMALS) % std
 
     if to_LaTeX:
-        evaluation.df_to_LaTeX(weather_forecast_df)
+        model_eval.df_to_LaTeX(weather_forecast_df)
 
     return weather_forecast_df
 
