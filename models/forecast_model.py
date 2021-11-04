@@ -17,7 +17,8 @@ class ForecastModel(ABC):
     """
 
     @abstractmethod
-    def __init__(self, y, t, u=None, ID='', seed=0, global_model=False):
+    def __init__(self, y, t, u=None, ID='', distribution=None, seed=0, global_model=False):
+        self.distribution = distribution
         self.seed = seed
         self.global_model = global_model
         self.s_d = 48
@@ -48,8 +49,8 @@ class ForecastModel(ABC):
         # Timestamp of first forecast
         self.t_f = t[-1] + dt.timedelta(minutes=30)
 
-        # Last timestamp where a forecast is available
-        self.t_l = t[-1]
+        # Dictionary of predictions
+        self.predictions = {}
 
         # Dictionary of forecast results
         results_dict = {
@@ -111,13 +112,6 @@ class ForecastModel(ABC):
         """
         pass
 
-    def validate_timestamps(self, t):
-        """
-        Validates whether predictions are available for the timestamps t.
-        """
-        if t[0] < self.t_f or t[-1] > self.t_l:
-            raise ValueError('No prediction available for the timestamps t.')
-
     def validate_input(self, u):
         """
         Validates whether the input u is consistently missing or consistently not missing.
@@ -140,84 +134,92 @@ class ForecastModel(ABC):
         else:
             self.y = np.hstack([self.y, y])
         self.t = self.t.union(t)
-        self.t_l = t[-1]
         self.validate_input(u)
         if u is not None:
             if u.ndim == 1:
                 u = u[:, np.newaxis]
             self.u = np.vstack([self.u, u])
 
+    def predictions_available(self, t):
+        """
+        Checks if predictions are already available for the timestamps t.
+        """
+        return (t[0], t[-1]) in self.predictions
+
     @abstractmethod
     def predict(self, t, u=None):
         """
         Abstract method (to be implemented by subclasses) that predicts the distribution of observations y for
         the timestamps t, optionally given covariates u. Note that the prediction has to start right after the
-        last measurement and that forecasts must be subsequent.
+        last measurement.
         """
-        if t[0] >= self.t_f and t[-1] <= self.t_l:
-            # Prediction already available
+        if self.predictions_available(t):
             return True
 
         if t[0] != self.t[-1] + dt.timedelta(minutes=30):
             raise ValueError('Prediction has to start right after last measurement.')
-        if t[0] != self.t_l + dt.timedelta(minutes=30):
-            raise ValueError('Forecasts must be subsequent.')
         if len(t) > self.max_horizon:
             raise ValueError(f'The maximum forecast horizon is {self.max_horizon} half-hours.')
         self.validate_input(u)
 
         # Execute prediction
-        self.t_l = t[-1]
         return False
 
-    @abstractmethod
-    def get_mean(self, t):
+    def validate_timestamps(self, t):
         """
-        Abstract method (to be implemented by subclasses) that returns the mean forecasts for the timestamps t.
+        Validates whether predictions are available for the timestamps t.
+        """
+        if not self.predictions_available(t):
+            raise ValueError('No prediction available for the timestamps t.')
+
+    def mean(self, t):
+        """
+        Returns the mean forecasts for the timestamps t.
         """
         self.validate_timestamps(t)
+        return self.distribution.mean(*self.predictions[(t[0], t[-1])])
 
-    @abstractmethod
-    def get_var(self, t):
+    def var(self, t):
         """
-        Abstract method (to be implemented by subclasses) that returns the variance forecasts for the timestamps t.
+        Returns the variance forecasts for the timestamps t.
         """
         self.validate_timestamps(t)
+        return self.distribution.var(*self.predictions[(t[0], t[-1])])
 
-    @abstractmethod
-    def get_percentile(self, p, t):
+    def percentile(self, p, t):
         """
-        Abstract method (to be implemented by subclasses) that returns the p-percentile forecasts for the timestamps t.
+        Returns the p-percentile forecasts for the timestamps t.
         """
         self.validate_timestamps(t)
+        return self.distribution.percentile(p, *self.predictions[(t[0], t[-1])])
 
-    def get_median(self, t):
+    def median(self, t):
         """
         Returns the median forecasts for the timestamps t.
         """
-        return self.get_percentile(50, t)
+        return self.percentile(50, t)
 
-    @abstractmethod
-    def get_pit(self, y_true, t):
+    def pit(self, y_true, t):
         """
-        Abstract method (to be implemented by subclasses) that returns the Probability Integral Transform (PIT)
-        for the timestamps t, given the true observations y_true.
+        Returns the Probability Integral Transform (PIT) for the timestamps t,
+        given the true observations y_true.
         """
         self.validate_timestamps(t)
+        return self.distribution.cdf(y_true, *self.predictions[(t[0], t[-1])])
 
-    @abstractmethod
-    def get_crps(self, y_true, t):
+    def crps(self, y_true, t):
         """
-        Abstract method (to be implemented by subclasses) that returns the Continuous Ranked Probability Score (CRPS)
-        for the timestamps t, given the true observations y_true.
+        Returns the Continuous Ranked Probability Score (CRPS) for the timestamps t,
+        given the true observations y_true.
         """
         self.validate_timestamps(t)
+        return self.distribution.crps(y_true, *self.predictions[(t[0], t[-1])])
 
     def mcrps(self, y_true, t):
         """
         Computes the mean CRPS for the timestamps t.
         """
-        return np.nanmean(self.get_crps(y_true, t), axis=0)
+        return np.nanmean(self.crps(y_true, t), axis=0)
 
     def rcrps(self, y_true, t):
         """
@@ -229,7 +231,7 @@ class ForecastModel(ABC):
         """
         Computes the absolute error for the timestamps t. Note that the median forecast is used as a point estimate.
         """
-        return np.abs(y_true - self.get_median(t))
+        return np.abs(y_true - self.median(t))
 
     def mae(self, y_true, t):
         """
@@ -261,7 +263,7 @@ class ForecastModel(ABC):
         """
         Computes the squared error for the timestamps t. Note that the mean forecast is used as a point estimate.
         """
-        return (y_true - self.get_mean(t)) ** 2
+        return (y_true - self.mean(t)) ** 2
 
     def rmse(self, y_true, t):
         """
@@ -280,15 +282,15 @@ class ForecastModel(ABC):
         Evaluates all metrics for the true observations y_true and the timestamps t and
         saves the results to a dictionary.
         """
-        mean = self.get_mean(t)
-        var = self.get_var(t)
-        p_05 = self.get_percentile(5, t)
-        p_25 = self.get_percentile(25, t)
-        p_50 = self.get_median(t)
-        p_75 = self.get_percentile(75, t)
-        p_95 = self.get_percentile(95, t)
-        pit = self.get_pit(y_true, t)
-        crps = self.get_crps(y_true, t)
+        mean = self.mean(t)
+        var = self.var(t)
+        p_05 = self.percentile(5, t)
+        p_25 = self.percentile(25, t)
+        p_50 = self.median(t)
+        p_75 = self.percentile(75, t)
+        p_95 = self.percentile(95, t)
+        pit = self.pit(y_true, t)
+        crps = self.crps(y_true, t)
         mcrps = self.mcrps(y_true, t)
         rcrps = self.rcrps(y_true, t)
         # ae = self.ae(y_true, t)
@@ -348,8 +350,7 @@ class ForecastModel(ABC):
         Returns the directory where results will be saved to.
         """
         out_dir = os.path.join(OUT_PATH, self.__str__())
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+        os.makedirs(out_dir, exist_ok=True)
         return out_dir
 
     def save_results(self):
@@ -367,12 +368,12 @@ class ForecastModel(ABC):
         the true observations y_true for the timestamps t. If plot_median=False the mean forecast will be plotted.
         If plot_percentiles=False no confidence intervals are shown.
         """
-        median = self.get_median(t)
-        mean = self.get_mean(t)
-        p_25 = self.get_percentile(25, t)
-        p_75 = self.get_percentile(75, t)
-        p_05 = self.get_percentile(5, t)
-        p_95 = self.get_percentile(95, t)
+        median = self.median(t)
+        mean = self.mean(t)
+        p_25 = self.percentile(25, t)
+        p_75 = self.percentile(75, t)
+        p_05 = self.percentile(5, t)
+        p_95 = self.percentile(95, t)
 
         if not self.global_model:
             median = median[:, np.newaxis]

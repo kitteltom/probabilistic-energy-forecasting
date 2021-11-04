@@ -13,7 +13,7 @@ from distributions.empirical import Empirical
 import utils
 
 
-class DeepAR(nn.Module, ForecastModel, Empirical):
+class DeepAR(nn.Module, ForecastModel):
     """
     Implements the global probabilistic forecasting model called DeepAR (Salinas et. al., 2020).
     """
@@ -28,7 +28,7 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
             batch_size=512
     ):
         nn.Module.__init__(self)
-        ForecastModel.__init__(self, y, t, u, ID, seed=seed, global_model=True)
+        ForecastModel.__init__(self, y, t, u, ID, distribution=Empirical, seed=seed, global_model=True)
 
         # Fix the seed
         torch.manual_seed(seed)
@@ -77,10 +77,6 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
 
         self.X_mean = 0
         self.X_std = 1
-
-        self.samples_y = np.zeros((self.num_samples, 0, self.n))
-        # for i in range(self.n):
-        #     self.results[i]['samples_y'] = []
 
         # Load a trained model if applicable
         self.model_path = os.path.join(self.get_out_dir(), '_state_dict_' + self.results[0]["ID"])
@@ -404,39 +400,8 @@ class DeepAR(nn.Module, ForecastModel, Empirical):
             else:
                 samples_y = self.sample_per_time_series(h, y, t, u)
 
-        self.samples_y = np.hstack([self.samples_y, samples_y])
+        self.predictions[(t[0], t[-1])] = [samples_y]
 
         prediction_time = time.time() - start_time
         for i in range(self.n):
-            # self.results[i]['samples_y'].append(samples_y[:, :, i].tolist())
             self.results[i]['prediction_time'].append(prediction_time / self.n)
-
-    def get_mean(self, t):
-        super().get_mean(t)
-
-        idx = self.idx(t)
-        return self.mean(self.samples_y[:, idx])
-
-    def get_var(self, t):
-        super().get_var(t)
-
-        idx = self.idx(t)
-        return self.var(self.samples_y[:, idx])
-
-    def get_percentile(self, p, t):
-        super().get_percentile(p, t)
-
-        idx = self.idx(t)
-        return self.percentile(p, self.samples_y[:, idx])
-
-    def get_pit(self, y_true, t):
-        super().get_pit(y_true, t)
-
-        idx = self.idx(t)
-        return self.cdf(y_true, self.samples_y[:, idx])
-
-    def get_crps(self, y_true, t):
-        super().get_crps(y_true, t)
-
-        idx = self.idx(t)
-        return self.crps(y_true, self.samples_y[:, idx])

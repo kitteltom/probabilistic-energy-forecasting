@@ -10,13 +10,13 @@ from distributions.log_normal import LogNormal
 import utils
 
 
-class LogNormalIC(ForecastModel, LogNormal):
+class LogNormalIC(ForecastModel):
     """
     Implements a parametric variant of the non-parametric probabilistic forecasting model called
     KD-IC (Arora et. al., 2016). The forecasts distributions are log-normal.
     """
     def __init__(self, y, t, u=None, ID='', window_size=16):
-        super().__init__(y, t, u, ID)
+        super().__init__(y, t, u, ID, distribution=LogNormal)
 
         # Default parameters [lambda]
         self.theta = np.array([0.9])
@@ -28,18 +28,13 @@ class LogNormalIC(ForecastModel, LogNormal):
 
         self.window_size = window_size
 
-        self.mu_y = np.zeros(0)
-        self.sigma2_y = np.zeros(0)
-        # self.results[0]['mu_y'] = []
-        # self.results[0]['sigma2_y'] = []
-
         self.cnt = 0
         params_path = os.path.join(self.get_out_dir(), self.results[0]["ID"] + '.json')
         if os.path.exists(params_path):
             with open(params_path, 'r') as fp:
                 res = json.load(fp)
             self.theta = np.array(res['params'])
-            self.results[0]['params'] = self.theta.tolist()
+        self.results[0]['params'] = self.theta.tolist()
 
     def __str__(self):
         return 'LogNormal-IC'
@@ -186,39 +181,6 @@ class LogNormalIC(ForecastModel, LogNormal):
         start_time = time.time()
 
         mu_y, sigma2_y, _ = self.max_likelihood_prediction(self.theta, t, u)
-        self.mu_y = np.hstack([self.mu_y, mu_y])
-        self.sigma2_y = np.hstack([self.sigma2_y, sigma2_y])
+        self.predictions[(t[0], t[-1])] = [mu_y, sigma2_y]
 
-        # self.results[0]['mu_y'].append(mu_y.tolist())
-        # self.results[0]['sigma2_y'].append(sigma2_y.tolist())
         self.results[0]['prediction_time'].append(time.time() - start_time)
-
-    def get_mean(self, t):
-        super().get_mean(t)
-
-        idx = self.idx(t)
-        return self.mean(self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_var(self, t):
-        super().get_var(t)
-
-        idx = self.idx(t)
-        return self.var(self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_percentile(self, p, t):
-        super().get_percentile(p, t)
-
-        idx = self.idx(t)
-        return self.percentile(p, self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_pit(self, y_true, t):
-        super().get_pit(y_true, t)
-
-        idx = self.idx(t)
-        return self.cdf(y_true, self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_crps(self, y_true, t):
-        super().get_crps(y_true, t)
-
-        idx = self.idx(t)
-        return self.crps(y_true, self.mu_y[idx], self.sigma2_y[idx])

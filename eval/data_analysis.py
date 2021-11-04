@@ -23,15 +23,14 @@ WEATHER_VARIABLE_NAMES = {
     'wind_speed': 'Wind speed [m/s]'
 }
 DECIMALS = 2
-COLORS = ('C0', 'C1', 'C3', 'C9', 'C7')
+COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2')
 MARKERS = ('o', 'X', 'v', 'd', 'p')
 S_D = 48
 S_W = 7 * S_D
 
 # Load the dataframes
 energy_df = pd.read_csv(DATA_PATH + 'energy_data.csv', index_col=0, parse_dates=True)
-weather_df = pd.read_csv(DATA_PATH + 'weather_data.csv', index_col=0, parse_dates=True)
-weather_forecast1d_df = pd.read_csv(DATA_PATH + 'weather_forecast1d_data.csv', index_col=0, parse_dates=True)
+weather_df = pd.read_csv(DATA_PATH + 'weather_reanalysis_data.csv', index_col=0, parse_dates=True)
 weather_forecast4d_df = pd.read_csv(DATA_PATH + 'weather_forecast4d_data.csv', index_col=0, parse_dates=True)
 demographic_df = pd.read_csv(DATA_PATH + 'demographic_data.csv', index_col=0)
 
@@ -103,7 +102,7 @@ def create_hierarchical_sunburst():
     fig.update_layout(
         font={'family': 'serif', 'size': 16},
         margin={'t': 5, 'l': 5, 'r': 5, 'b': 5},
-        colorway=['#1f77b4', '#ff7f0e', '#d62728']
+        colorway=[COLORS[0], COLORS[1], COLORS[2]]
     )
 
     fig.write_image(OUT_PATH + 'hierarchical_sunburst.pdf')
@@ -130,7 +129,7 @@ def get_observations_at(level, cluster, t=None):
 
 def get_weather_df(forecast):
     if forecast:
-        return weather_forecast1d_df
+        return weather_forecast4d_df
     else:
         return weather_df
 
@@ -153,7 +152,7 @@ def rmae(y_true, y_hat, axis=1):
 
 def create_weather_forecast_df(
         weather_variables=tuple(WEATHER_VARIABLE_NAMES.keys()),
-        horizons=(2, 3, 4),
+        horizons=(1, 2, 3, 4),
         with_std=True,
         to_LaTeX=True
 ):
@@ -164,10 +163,10 @@ def create_weather_forecast_df(
 
     weather_forecast_df = pd.DataFrame(index=row_names, columns=col_names, dtype=float)
     for w, weather_variable in enumerate(weather_variables):
-        actual = weather_forecast1d_df.loc[t_train, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
+        actual = weather_df.loc[t_train, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
         forecast = weather_forecast4d_df.loc[t_train, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
         for h, horizon in enumerate(horizons):
-            idx = np.arange(S_D, horizon * S_D)
+            idx = np.arange(0, horizon * S_D)
             mean = np.mean(rmae(actual[:, idx], forecast[:, idx]))
             weather_forecast_df.iloc[w, h] = (('%%.%sf' % DECIMALS) % mean)
             if with_std:

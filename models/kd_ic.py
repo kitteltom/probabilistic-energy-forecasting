@@ -11,12 +11,12 @@ from distributions.non_parametric import NonParametric
 import utils
 
 
-class KDIC(ForecastModel, NonParametric):
+class KDIC(ForecastModel):
     """
     Implements the non-parametric probabilistic forecasting model called KD-IC (Arora et. al., 2016).
     """
     def __init__(self, y, t, u=None, ID='', window_size=16, num_eval_points=100):
-        super().__init__(y, t, u, ID)
+        super().__init__(y, t, u, ID, distribution=NonParametric)
 
         # Default parameters [lambda, h_y]
         self.theta = np.array([0.9, 0.015])
@@ -29,14 +29,9 @@ class KDIC(ForecastModel, NonParametric):
         self.window_size = window_size
         self.num_eval_points = num_eval_points
         delta_y = self.y_max - self.y_min
-        self.y_max += 0.05 * delta_y
-        self.y_min -= 0.05 * delta_y
+        self.y_max += 0.1 * delta_y
+        self.y_min -= 0.1 * delta_y
         self.eval_points = self.get_eval_points()
-
-        self.pdf_y = np.zeros((num_eval_points, 0))
-        self.cdf_y = np.zeros((num_eval_points, 0))
-        # self.results[0]['pdf_y'] = []
-        # self.results[0]['cdf_y'] = []
 
         self.cnt = 0
         params_path = os.path.join(self.get_out_dir(), self.results[0]["ID"] + '.json')
@@ -44,7 +39,7 @@ class KDIC(ForecastModel, NonParametric):
             with open(params_path, 'r') as fp:
                 res = json.load(fp)
             self.theta = np.array(res['params'])
-            self.results[0]['params'] = self.theta.tolist()
+        self.results[0]['params'] = self.theta.tolist()
 
     def __str__(self):
         return 'KD-IC'
@@ -165,7 +160,7 @@ class KDIC(ForecastModel, NonParametric):
 
         if y is not None:
             eval_points = utils.inv_min_max_norm(self.eval_points, self.y_min, self.y_max)
-            crps = np.nanmean(self.crps(y, cdf_y, eval_points))
+            crps = np.nanmean(self.distribution.crps(y, cdf_y, eval_points))
         else:
             crps = 0
 
@@ -232,44 +227,58 @@ class KDIC(ForecastModel, NonParametric):
         start_time = time.time()
 
         pdf_y, cdf_y, _ = self.kde(self.theta, t, u)
-        self.pdf_y = np.hstack([self.pdf_y, pdf_y])
-        self.cdf_y = np.hstack([self.cdf_y, cdf_y])
+        self.predictions[(t[0], t[-1])] = [pdf_y, cdf_y]
 
-        # self.results[0]['pdf_y'].append(pdf_y.tolist())
-        # self.results[0]['cdf_y'].append(cdf_y.tolist())
         self.results[0]['prediction_time'].append(time.time() - start_time)
 
-    def get_mean(self, t):
-        super().get_mean(t)
+    def mean(self, t):
+        """
+        Returns the mean forecasts for the timestamps t.
+        """
+        self.validate_timestamps(t)
 
-        idx = self.idx(t)
-        mean = self.mean(self.pdf_y[:, idx], self.eval_points)
+        pdf_y = self.predictions[(t[0], t[-1])][0]
+        mean = self.distribution.mean(pdf_y, self.eval_points)
         return utils.inv_min_max_norm(mean, self.y_min, self.y_max)
 
-    def get_var(self, t):
-        super().get_var(t)
+    def var(self, t):
+        """
+        Returns the variance forecasts for the timestamps t.
+        """
+        self.validate_timestamps(t)
 
-        idx = self.idx(t)
-        var = self.var(self.pdf_y[:, idx], self.eval_points)
+        pdf_y = self.predictions[(t[0], t[-1])][0]
+        var = self.distribution.var(pdf_y, self.eval_points)
         return (self.y_max - self.y_min) ** 2 * var
 
-    def get_percentile(self, p, t):
-        super().get_percentile(p, t)
+    def percentile(self, p, t):
+        """
+        Returns the p-percentile forecasts for the timestamps t.
+        """
+        self.validate_timestamps(t)
 
-        idx = self.idx(t)
-        percentile = self.percentile(p, self.cdf_y[:, idx], self.eval_points)
+        cdf_y = self.predictions[(t[0], t[-1])][1]
+        percentile = self.distribution.percentile(p, cdf_y, self.eval_points)
         return utils.inv_min_max_norm(percentile, self.y_min, self.y_max)
 
-    def get_pit(self, y_true, t):
-        super().get_pit(y_true, t)
+    def pit(self, y_true, t):
+        """
+        Returns the Probability Integral Transform (PIT) for the timestamps t,
+        given the true observations y_true.
+        """
+        self.validate_timestamps(t)
 
-        idx = self.idx(t)
+        cdf_y = self.predictions[(t[0], t[-1])][1]
         eval_points = utils.inv_min_max_norm(self.eval_points, self.y_min, self.y_max)
-        return self.cdf(y_true, self.cdf_y[:, idx], eval_points)
+        return self.distribution.cdf(y_true, cdf_y, eval_points)
 
-    def get_crps(self, y_true, t):
-        super().get_crps(y_true, t)
+    def crps(self, y_true, t):
+        """
+        Returns the Continuous Ranked Probability Score (CRPS) for the timestamps t,
+        given the true observations y_true.
+        """
+        self.validate_timestamps(t)
 
-        idx = self.idx(t)
+        cdf_y = self.predictions[(t[0], t[-1])][1]
         eval_points = utils.inv_min_max_norm(self.eval_points, self.y_min, self.y_max)
-        return self.crps(y_true, self.cdf_y[:, idx], eval_points)
+        return self.distribution.crps(y_true, cdf_y, eval_points)

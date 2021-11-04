@@ -33,7 +33,7 @@ MODEL_NAMES = {
 }
 MAIN_SEED = '42'
 DECIMALS = 2
-COLORS = ('C0', 'C1', 'C3', 'C9', 'C7')
+COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2')
 MARKERS = ('o', 'X', 'v', 'd', 'p')
 LINESTYLES = ('solid', 'dashed', 'dashdot')
 S_D = 48

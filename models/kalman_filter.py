@@ -9,13 +9,13 @@ from distributions.log_normal import LogNormal
 import utils
 
 
-class KalmanFilter(ForecastModel, LogNormal):
+class KalmanFilter(ForecastModel):
     """
     Implements the probabilistic forecasting model based on double-seasonal HWT Exponential Smoothing (Taylor, 2010)
     that estimates parameters and creates forecasts in closed form using the linear Kalman Filter (Särkkä, 2013).
     """
     def __init__(self, y, t, u=None, ID='', exp_smooth_fit=False, num_filter_weeks=52):
-        super().__init__(y, t, u, ID)
+        super().__init__(y, t, u, ID, distribution=LogNormal)
 
         self.dim = 2 + self.s_d + self.s_w
         if u is not None:
@@ -43,12 +43,6 @@ class KalmanFilter(ForecastModel, LogNormal):
         # Measurement noise
         self.r = lambda theta: 0
 
-        # Predicted measurement mean and variance
-        self.mu_y = np.zeros(0)
-        self.sigma2_y = np.zeros(0)
-        # self.results[0]['mu_y'] = []
-        # self.results[0]['sigma2_y'] = []
-
         # Mean and Variance of the prior state distribution
         self.m = self.initialize_mean(y, u)
         self.P = 1e-3 * np.eye(self.dim)
@@ -62,13 +56,13 @@ class KalmanFilter(ForecastModel, LogNormal):
             with open(params_path, 'r') as fp:
                 res = json.load(fp)
             self.theta = np.array(res['params'])
-            self.results[0]['params'] = self.theta.tolist()
             _, _, self.m, self.P, self.mle = self.filter(
                 self.theta,
                 t[-self.filter_range:],
                 u[-self.filter_range:] if u is not None else None,
                 y[-self.filter_range:]
             )
+        self.results[0]['params'] = self.theta.tolist()
 
     def __str__(self):
         return 'KalmanFilter'
@@ -306,39 +300,6 @@ class KalmanFilter(ForecastModel, LogNormal):
         start_time = time.time()
 
         mu_y, sigma2_y, _, _, _ = self.filter(self.theta, t, u)
-        self.mu_y = np.hstack([self.mu_y, mu_y])
-        self.sigma2_y = np.hstack([self.sigma2_y, sigma2_y])
+        self.predictions[(t[0], t[-1])] = [mu_y, sigma2_y]
 
-        # self.results[0]['mu_y'].append(mu_y.tolist())
-        # self.results[0]['sigma2_y'].append(sigma2_y.tolist())
         self.results[0]['prediction_time'].append(time.time() - start_time)
-
-    def get_mean(self, t):
-        super().get_mean(t)
-
-        idx = self.idx(t)
-        return self.mean(self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_var(self, t):
-        super().get_var(t)
-
-        idx = self.idx(t)
-        return self.var(self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_percentile(self, p, t):
-        super().get_percentile(p, t)
-
-        idx = self.idx(t)
-        return self.percentile(p, self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_pit(self, y_true, t):
-        super().get_pit(y_true, t)
-
-        idx = self.idx(t)
-        return self.cdf(y_true, self.mu_y[idx], self.sigma2_y[idx])
-
-    def get_crps(self, y_true, t):
-        super().get_crps(y_true, t)
-
-        idx = self.idx(t)
-        return self.crps(y_true, self.mu_y[idx], self.sigma2_y[idx])
