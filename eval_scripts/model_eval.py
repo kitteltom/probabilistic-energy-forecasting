@@ -14,8 +14,9 @@ plt.rc('font', **{'family': 'serif', 'sans-serif': ['lmodern'], 'size': 18})
 plt.rc('axes', **{'titlesize': 18, 'labelsize': 18})
 
 # Constants
-JSON_PATH = './out/'
-OUT_PATH = './out/'
+SEASON = 'sf'
+JSON_PATH = f'/Users/kitteltom/out_{SEASON}/'
+OUT_PATH = f'./out/{SEASON}/'
 MODEL_NAMES = {
     'KF': ('KalmanFilter', ''),
     'KF(+W)': ('KalmanFilter', '_W'),
@@ -32,6 +33,9 @@ MODEL_NAMES = {
     'LW': ('LastWeek', '')
 }
 MAIN_SEED = '42'
+FORECAST_REPS = 28
+HORIZON = 181
+
 DECIMALS = 2
 COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2')
 MARKERS = ('o', 'X', 'v', 'd', 'p')
@@ -41,7 +45,7 @@ S_W = 7 * S_D
 
 
 def get_file_name(model, level, cluster, seed=''):
-    return f'{MODEL_NAMES[model][0]}{seed}_{level}_{cluster}{MODEL_NAMES[model][1]}'
+    return f'{MODEL_NAMES[model][0]}{seed}_{level}_{cluster}{MODEL_NAMES[model][1]}_{SEASON}'
 
 
 def get_path(model, level, cluster, seed=''):
@@ -64,10 +68,9 @@ def collect_results(
                 'DeepAR', 'DeepAR(+W)', 'DeepAR(+WF)',
                 'LW'),
         seeds=(0, 1, 2, 3, 4),
-        forecast_reps=28,
         save_results_with_info=True
 ):
-    results_path = os.path.join(JSON_PATH, 'results_with_info.npy')
+    results_path = os.path.join(JSON_PATH, f'results_with_info_{SEASON}.npy')
     if os.path.isfile(results_path):
         results_with_info = np.load(results_path, allow_pickle=True)
         return results_with_info[0], results_with_info[1]
@@ -78,7 +81,7 @@ def collect_results(
         clusters = level_info[level]['clusters']
 
         # Create results array
-        results[level] = np.empty((len(metrics), len(models), len(clusters), forecast_reps))
+        results[level] = np.empty((len(metrics), len(models), len(clusters), FORECAST_REPS))
         results[level][:] = np.nan
         for m, model in enumerate(models):
             if level == 'L3' and 'KF' in model:
@@ -105,7 +108,7 @@ def collect_results(
         'levels': level_info,
         'metrics': list(metrics),
         'models': list(models),
-        'reps': forecast_reps
+        'reps': FORECAST_REPS
     }
 
     if save_results_with_info:
@@ -122,30 +125,28 @@ def collect_results_per_tstp(
                 'DeepAR', 'DeepAR(+W)', 'DeepAR(+WF)',
                 'LW'),
         seeds=(0, 1, 2, 3, 4),
-        forecast_reps=28,
-        horizon=192,
         save_results_per_tstp_with_info=True
 ):
-    results_path = os.path.join(JSON_PATH, 'results_per_tstp_with_info.npy')
+    results_path = os.path.join(JSON_PATH, f'results_per_tstp_with_info_{SEASON}.npy')
     if os.path.isfile(results_path):
         results_with_info = np.load(results_path, allow_pickle=True)
         return results_with_info[0], results_with_info[1]
 
     results = {}
     level_info = data_analysis.get_level_info(levels)
-    t_train, t_val = main.train_val_split(data_analysis.energy_df.index)
+    t_train, t_val = main.train_val_split(data_analysis.energy_df.index, winter_period=SEASON == 'fw')
     for level in levels:
         clusters = level_info[level]['clusters']
 
         # Create results array
-        results[level] = np.empty((len(seeds), len(metrics), len(models), len(clusters), forecast_reps, horizon))
+        results[level] = np.empty((len(seeds), len(metrics), len(models), len(clusters), FORECAST_REPS, HORIZON))
         results[level][:] = np.nan
         level_info[level]['y_mean'] = []
         for c, cluster in enumerate(clusters):
             level_info[level]['y_mean'].append(
                 np.nanmean(data_analysis.get_observations_at(level, cluster, t_train))
             )
-            y_true = data_analysis.get_observations_at(level, cluster, t_val).reshape(forecast_reps, horizon)
+            y_true = data_analysis.get_observations_at(level, cluster, t_val).reshape(FORECAST_REPS, -1)[:, :HORIZON]
             for m, model in enumerate(models):
                 if level == 'L3' and 'KF' in model:
                     # No level 3 results for the KF model
@@ -179,8 +180,8 @@ def collect_results_per_tstp(
         'levels': level_info,
         'metrics': list(metrics),
         'models': list(models),
-        'reps': forecast_reps,
-        'horizon': horizon
+        'reps': FORECAST_REPS,
+        'horizon': HORIZON
     }
 
     if save_results_per_tstp_with_info:
@@ -301,7 +302,7 @@ def _complete_plot(name, legend=True, grid=True):
     if grid:
         plt.grid()
     plt.tight_layout()
-    plt.savefig(OUT_PATH + f'{name}.pdf', bbox_inches='tight')
+    plt.savefig(OUT_PATH + f'{name}_{SEASON}.pdf', bbox_inches='tight')
     plt.close()
 
 
@@ -317,7 +318,7 @@ def plot_epoch_loss(model, level, cluster, seed=MAIN_SEED):
     plt.plot(np.arange(len(val_loss)) + 1, val_loss, color=COLORS[1], label='Validation')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
-    _complete_plot(f'{get_file_name(model, level, cluster, seed)}_epoch_loss', grid=False)
+    _complete_plot(f'epoch_loss_{get_file_name(model, level, cluster, seed)}', grid=False)
 
 
 def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')):
@@ -334,7 +335,7 @@ def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')
     score_WF = np.empty(len(horizons))
 
     for h, horizon in enumerate(horizons):
-        idx = np.arange(0, horizon * S_D)
+        idx = np.arange(0, min(horizon * S_D, HORIZON))
         res = []
         res_W = []
         res_WF = []
@@ -377,12 +378,12 @@ def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')
         color=get_color(model_WF),
         marker=MARKERS[2]
     )
-    plt.ylim(6.95, 8.35)
+    # plt.ylim(6.95, 8.35)
     plt.ylabel(metric)
     plt.xlabel('Horizon')
     plt.xticks(np.arange(len(horizons)), np.array(horizons))
     plt.title(model)
-    _complete_plot(f"{model}_{metric}_horizon", grid=False, legend=False)
+    _complete_plot(f"horizon_{model}_{metric}", grid=False, legend=False)
 
 
 def plot_reps(metric, levels=('L0', 'L1', 'L2'), models=None, name=None):
@@ -424,7 +425,8 @@ def plot_reps(metric, levels=('L0', 'L1', 'L2'), models=None, name=None):
     plt.grid(axis='y')
     second_legend = plt.legend(lines, ('no weather', 'actual weather'), loc='upper left')
     plt.gca().add_artist(second_legend)
-    _complete_plot(f"{f'{name}_' if name is not None else ''}{metric}_reps", grid=False)
+    plt.legend(loc='upper right')
+    _complete_plot(f"reps_{f'{name}_' if name is not None else ''}{metric}", grid=False, legend=False)
 
 
 def plot_clusters(level, metric, models=None, name=None):
@@ -456,7 +458,7 @@ def plot_clusters(level, metric, models=None, name=None):
         plt.xticks(np.arange(len(cluster_labels)), cluster_labels, rotation=90)
     else:
         plt.xticks(np.arange(len(cluster_labels)), cluster_labels)
-    _complete_plot(f"{f'{name}_' if name is not None else ''}{level}_{metric}_clusters")
+    _complete_plot(f"clusters_{f'{name}_' if name is not None else ''}{level}_{metric}")
 
 
 def plot_aggregate_size(metric, models=None, name=None):
@@ -508,7 +510,7 @@ def plot_aggregate_size(metric, models=None, name=None):
     plt.xlabel('\\# aggregated meters')
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
-    _complete_plot(f"{f'{name}_' if name is not None else ''}{metric}_aggregate_size", grid=False)
+    _complete_plot(f"aggregate_size_{f'{name}_' if name is not None else ''}{metric}", grid=False)
 
 
 def get_skill_scores(model, metric, no_L3=False):
@@ -526,7 +528,7 @@ def get_skill_scores(model, metric, no_L3=False):
     bottom_level_score_W = []
     bottom_level_score_WF = []
 
-    t_train = main.train_val_split(data_analysis.energy_df.index)[0]
+    t_train = main.train_val_split(data_analysis.energy_df.index, winter_period=SEASON == 'fw')[0]
     u = data_analysis.daily(
         data_analysis.get_weather_df(forecast=False).loc[t_train, 'temperature'].to_numpy(float),
         reduce=True
@@ -616,7 +618,7 @@ def plot_aggregate_size_skill(model, metric):
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
     plt.title(model)
-    _complete_plot(f"{model}_{metric}_aggregate_size_skill", grid=False, legend=False)
+    _complete_plot(f"aggregate_size_skill_{model}_{metric}", grid=False, legend=False)
 
 
 def plot_temperature_correlation_skill(model, metric):
@@ -651,7 +653,7 @@ def plot_temperature_correlation_skill(model, metric):
     plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
     plt.xlabel('Temperature corr. [$R^2$]')
     plt.title(model)
-    _complete_plot(f'{model}_{metric}_temperature_correlation_skill', grid=False, legend=False)
+    _complete_plot(f'temperature_correlation_skill_{model}_{metric}', grid=False, legend=False)
 
 
 def plot_coverage(levels=('L0', 'L1', 'L2'), models=None, name=None):
@@ -683,7 +685,7 @@ def plot_coverage(levels=('L0', 'L1', 'L2'), models=None, name=None):
     plt.xlabel('Percentile')
     plt.xticks(p[::25])
     plt.title(models[0])
-    _complete_plot(f"{f'{name}_' if name is not None else ''}coverage", grid=False, legend=False)
+    _complete_plot(f"coverage{f'_{name}' if name is not None else ''}", grid=False, legend=False)
 
 
 def plot_PIT_hist(model, level, cluster):
@@ -691,13 +693,13 @@ def plot_PIT_hist(model, level, cluster):
     pit = np.ravel(res['PIT'])
 
     plt.figure(figsize=(3.5, 3))
-    plt.hist(pit, bins=20, density=True, color=get_color(model), alpha=0.8, label=model)
+    plt.hist(pit, bins=20, density=True, color=get_color(model), label=model)
     plt.plot([0, 1], [1, 1], color='grey', label='$\\mathcal{U}(0, 1)$', linestyle='dashed')
     plt.ylim((0, 2.5))
     plt.ylabel('Relative frequency')
     plt.xlabel('PIT')
     plt.title(model)
-    _complete_plot(f'{get_file_name(model, level, cluster)}_PIT_hist', grid=False, legend=False)
+    _complete_plot(f'PIT_hist_{get_file_name(model, level, cluster)}', grid=False, legend=False)
 
 
 def plot_PIT_overview(model, num_cols=2):
@@ -724,15 +726,15 @@ def plot_PIT_overview(model, num_cols=2):
             idx = i * len(row) + j
             if idx >= len(pits):
                 break
-            col.hist(pits[idx], bins=50, density=True, color=COLORS[0], alpha=0.8, label=titles[idx])
-            col.plot([0, 1], [1, 1], color=COLORS[1], label='$\\mathcal{U}(0, 1)$')
+            col.hist(pits[idx], bins=50, density=True, color=get_color(model), label=titles[idx])
+            col.plot([0, 1], [1, 1], color='grey', label='$\\mathcal{U}(0, 1)$', linestyle='dashed')
             col.set_ylim((0, 3))
             col.set_ylabel('Relative frequency')
             col.set_xlabel('PIT')
             col.legend()
 
     plt.tight_layout()
-    plt.savefig(OUT_PATH + f'{MODEL_NAMES[model][0]}{MODEL_NAMES[model][1]}_PIT_overview.pdf')
+    plt.savefig(OUT_PATH + f'PIT_overview_{MODEL_NAMES[model][0]}{MODEL_NAMES[model][1]}_{SEASON}.pdf')
     plt.close()
 
 
@@ -794,7 +796,7 @@ def plot_coherency_errors_per_half_hour(model, level, cluster, base_level='L3'):
     plt.xticks(np.arange(2, S_D, 6) + 1, ticks, rotation=0)
     plt.title(model)
     _complete_plot(
-        f'{get_file_name(model, level, cluster)}_{base_level}_coherency_errors_per_half_hour',
+        f'coherency_errors_per_half_hour_{get_file_name(model, level, cluster)}_{base_level}',
         legend=False,
         grid=False
     )
@@ -832,7 +834,7 @@ def plot_coherency_errors(level, cluster, base_level='L3'):
     plt.xlabel('Model')
     plt.grid(axis='y')
     _complete_plot(
-        f'{level}_{cluster}_{base_level}_coherency_errors',
+        f'coherency_errors_{level}_{cluster}_{base_level}',
         legend=False,
         grid=False
     )
@@ -898,7 +900,7 @@ def plot_forecast(model, level, cluster, number):
     ticks[0] = t[0].strftime('%a, %H:%M\n%b %d, %Y')
     plt.xticks(np.arange(0, len(t), S_D), ticks, rotation=0)
 
-    _complete_plot(f'{get_file_name(model, level, cluster)}_number{number}_forecast', legend=False, grid=False)
+    _complete_plot(f'forecast_{get_file_name(model, level, cluster)}_number{number}', legend=False, grid=False)
 
 
 def plot_forecast1d(model, level, cluster, number):
@@ -960,7 +962,7 @@ def plot_forecast1d(model, level, cluster, number):
     plt.xlabel('Time of day')
     ticks = np.array(t[2:S_D:10].map(lambda x: x.strftime('%H:%M')))
     plt.xticks(np.arange(2, S_D, 10) + 1, ticks, rotation=0)
-    _complete_plot(f'{get_file_name(model, level, cluster)}_number{number}_forecast1d', legend=False, grid=False)
+    _complete_plot(f'forecast1d_{get_file_name(model, level, cluster)}_number{number}', legend=False, grid=False)
 
 
 def post_hoc_analysis(metric, models=('KD-IC', 'DeepAR')):
