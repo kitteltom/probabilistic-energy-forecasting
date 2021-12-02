@@ -46,7 +46,7 @@ def main():
                         help='List of levels in the hierarchy for which forecasts should be produced '
                              '(0 for the aggregated data, 1 for the ACORN categories, 2 for the ACORN groups, '
                              'and 3 for the household smart meter data)')
-    parser.add_argument("--horizon", default=181, type=int, help='Forecast horizon in half-hours')
+    parser.add_argument("--horizon", default=192, type=int, help='Forecast horizon in half-hours')
     parser.add_argument("--winter_val", action="store_true",
                         help='If set, the validation period is in the winter, otherwise it is in the summer.')
     parser.add_argument("--fit", action="store_true", help='If set, train the parameters')
@@ -103,16 +103,18 @@ def main():
 
     # Get weather data
     weather_variables = ['temperature', 'dew_point']
-    weather_df = pd.read_csv(DATA_PATH + 'weather_reanalysis_data.csv', index_col=0, parse_dates=True)
-    u_train = weather_df.loc[t_train, weather_variables].to_numpy(float)
-    u_val = weather_df.loc[t_val, weather_variables].to_numpy(float)
     if not args.forecast:
         weather_id = '_W'
+        weather_df = pd.read_csv(DATA_PATH + 'weather_reanalysis_data.csv', index_col=0, parse_dates=True)
+        u_train = weather_df.loc[t_train, weather_variables].to_numpy(float)
+        u_val = weather_df.loc[t_val, weather_variables].to_numpy(float)
         u_val_predict = u_val
     else:
         weather_id = '_WF'
         weather_forecast4d_df = pd.read_csv(DATA_PATH + 'weather_forecast4d_data.csv', index_col=0, parse_dates=True)
-        u_val_predict = weather_forecast4d_df.loc[t_val, weather_variables].to_numpy(float)
+        u_train = weather_forecast4d_df.loc[t_train, weather_variables].to_numpy(float)
+        u_val = weather_forecast4d_df.loc[t_val, weather_variables].to_numpy(float)
+        u_val_predict = u_val
 
     # Appendix for the filename ID to distinguish between experiments
     ID_appendix = weather_id if args.use_input else ''

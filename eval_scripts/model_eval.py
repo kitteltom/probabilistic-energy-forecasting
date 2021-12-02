@@ -14,7 +14,7 @@ plt.rc('font', **{'family': 'serif', 'sans-serif': ['lmodern'], 'size': 18})
 plt.rc('axes', **{'titlesize': 18, 'labelsize': 18})
 
 # Constants
-SEASON = 'sf'
+SEASON = 'fw'
 JSON_PATH = f'/Users/kitteltom/out_{SEASON}/'
 OUT_PATH = f'./out/{SEASON}/'
 MODEL_NAMES = {
@@ -34,7 +34,7 @@ MODEL_NAMES = {
 }
 MAIN_SEED = '42'
 FORECAST_REPS = 28
-HORIZON = 181
+HORIZON = 192
 
 DECIMALS = 2
 COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2')
@@ -386,6 +386,94 @@ def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')
     _complete_plot(f"horizon_{model}_{metric}", grid=False, legend=False)
 
 
+def plot_score_comparison(model, metric1, metric2, levels=('L0', 'L1', 'L2')):
+    results, info = collect_results()
+    model_W = model + '(+W)'
+    model_WF = model + '(+WF)'
+
+    i1 = info['metrics'].index(metric1)
+    i2 = info['metrics'].index(metric2)
+    m = info['models'].index(model)
+    m_W = info['models'].index(model_W)
+    m_WF = info['models'].index(model_WF)
+    scores = ([], [])
+    scores_W = ([], [])
+    scores_WF = ([], [])
+
+    for level in levels:
+        if level == 'L3' and 'KF' in model:
+            # No level 3 results for the KF model
+            continue
+        for c, cluster in enumerate(info['levels'][level]['clusters']):
+            scores[0].append(np.mean(results[level][i1, m, c]))
+            scores[1].append(np.mean(results[level][i2, m, c]))
+            scores_W[0].append(np.mean(results[level][i1, m_W, c]))
+            scores_W[1].append(np.mean(results[level][i2, m_W, c]))
+            scores_WF[0].append(np.mean(results[level][i1, m_WF, c]))
+            scores_WF[1].append(np.mean(results[level][i2, m_WF, c]))
+
+    plt.figure(figsize=(3.5, 4))
+    plt.scatter(
+        scores[0],
+        scores[1],
+        color=get_color(model),
+        marker=MARKERS[0],
+        edgecolors='none',
+        alpha=1.0
+    )
+    plt.scatter(
+        scores_W[0],
+        scores_W[1],
+        color=get_color(model),
+        marker=MARKERS[1],
+        edgecolors='none',
+        alpha=0.75
+    )
+    plt.scatter(
+        scores_WF[0],
+        scores_WF[1],
+        color=get_color(model),
+        marker=MARKERS[2],
+        edgecolors='none',
+        alpha=0.5
+    )
+    plt.ylabel(metric2)
+    plt.xlabel(metric1)
+    _complete_plot(f"comparison_{model}_{metric1}_{metric2}", grid=False, legend=False)
+
+
+# def plot_score_comparison(metric1, metric2, levels=('L0', 'L1', 'L2'), models=None, name=None):
+#     results, info = collect_results()
+#     models = info['models'] if models is None else models
+#
+#     i1 = info['metrics'].index(metric1)
+#     i2 = info['metrics'].index(metric2)
+#
+#     plt.figure(figsize=(6, 4))
+#     for j, model in enumerate(models):
+#         m = info['models'].index(model)
+#         metric1_mean = []
+#         metric2_mean = []
+#         for level in levels:
+#             if level == 'L3' and 'KF' in model:
+#                 # No level 3 results for the KF model
+#                 continue
+#             for c, cluster in enumerate(info['levels'][level]['clusters']):
+#                 metric1_mean.append(np.mean(results[level][i1, m, c]))
+#                 metric2_mean.append(np.mean(results[level][i2, m, c]))
+#         plt.scatter(
+#             metric1_mean,
+#             metric2_mean,
+#             label=model,
+#             color=get_color(model),
+#             marker=MARKERS[j]
+#         )
+#
+#     plt.ylabel(metric2)
+#     plt.xlabel(metric1)
+#     _complete_plot(f"comparison_{f'{name}_' if name is not None else ''}{metric1}_{metric2}", grid=False, legend=True)
+
+
 def plot_reps(metric, levels=('L0', 'L1', 'L2'), models=None, name=None):
     results, info = collect_results()
     models = info['models'] if models is None else models
@@ -591,28 +679,53 @@ def get_skill_scores(model, metric, no_L3=False):
 
 def plot_aggregate_size_skill(model, metric):
     skill_W, skill_WF, aggregate_sizes, _, _ = get_skill_scores(model, metric)
-    print(f'Correlation (W): {data_analysis.correlation(np.log(aggregate_sizes), skill_W):.3f}')
-    print(f'Correlation (WF): {data_analysis.correlation(np.log(aggregate_sizes), skill_WF):.3f}')
+
+    # # Regression
+    # x = np.logspace(np.log10(min(aggregate_sizes)), np.log10(max(aggregate_sizes)), 100)
+    # X = x[:, np.newaxis]
+    # X = np.hstack([np.log(X), np.ones((len(X), 1))])
+    #
+    # _, w_W = data_analysis.lin_reg(np.log(aggregate_sizes), skill_W, standardize=False, polynomial=False)
+    # y_W = X @ w_W
+    #
+    # _, w_WF = data_analysis.lin_reg(np.log(aggregate_sizes), skill_WF, standardize=False, polynomial=False)
+    # y_WF = X @ w_WF
+
+    corr_W = data_analysis.correlation(np.log(aggregate_sizes), skill_W)
+    corr_WF = data_analysis.correlation(np.log(aggregate_sizes), skill_WF)
+    print(f'Correlation (W): {corr_W:.3f}')
+    print(f'Correlation (WF): {corr_WF:.3f}')
 
     plt.figure(figsize=(3.5, 4))
     plt.plot([1, 2500], [0, 0], color='grey', linestyle='dashed')
     plt.scatter(
         aggregate_sizes,
         skill_W,
-        label='W',
         marker=MARKERS[0],
         color=get_color(model),
         edgecolors='none'
     )
+    # plt.plot(
+    #     x,
+    #     y_W,
+    #     color=get_color(model),
+    #     label=f'{corr_W:.2f}'
+    # )
     plt.scatter(
         aggregate_sizes,
         skill_WF,
-        label='WF',
         marker=MARKERS[1],
         color=get_color(model),
         edgecolors='none',
         alpha=0.5
     )
+    # plt.plot(
+    #     x,
+    #     y_WF,
+    #     color=get_color(model),
+    #     alpha=0.5,
+    #     label=f'{corr_WF:.2f}'
+    # )
     plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
     plt.xlabel('\\# aggregated meters')
     plt.xscale('log')
@@ -654,6 +767,102 @@ def plot_temperature_correlation_skill(model, metric):
     plt.xlabel('Temperature corr. [$R^2$]')
     plt.title(model)
     _complete_plot(f'temperature_correlation_skill_{model}_{metric}', grid=False, legend=False)
+
+
+def get_benchmark_skill_scores(model, metric, no_L3=False):
+    assert 'CRPS' not in metric
+    results, info = collect_results()
+
+    i = info['metrics'].index(metric)
+    lw = info['models'].index('LW')
+    m = info['models'].index(model)
+    m_W = info['models'].index(model + '(+W)')
+    m_WF = info['models'].index(model + '(+WF)')
+    aggregate_sizes = []
+    score_lw = []
+    score = []
+    score_W = []
+    score_WF = []
+    bottom_level_score_lw = []
+    bottom_level_score = []
+    bottom_level_score_W = []
+    bottom_level_score_WF = []
+
+    for level, level_info in info['levels'].items():
+        if level == 'L3' and ('KF' in model or no_L3):
+            # No level 3 results for the KF model
+            continue
+        for c, (cluster, agg_size) in enumerate(zip(level_info['clusters'], level_info['cardinality'])):
+            if level != 'L3':
+                aggregate_sizes.append(agg_size)
+                score_lw.append(np.mean(results[level][i, lw, c]))
+                score.append(np.mean(results[level][i, m, c]))
+                score_W.append(np.mean(results[level][i, m_W, c]))
+                score_WF.append(np.mean(results[level][i, m_WF, c]))
+            else:
+                bottom_level_score_lw.append(np.mean(results[level][i, lw, c]))
+                bottom_level_score.append(np.mean(results[level][i, m, c]))
+                bottom_level_score_W.append(np.mean(results[level][i, m_W, c]))
+                bottom_level_score_WF.append(np.mean(results[level][i, m_WF, c]))
+
+    if 'KF' not in model and not no_L3:
+        aggregate_sizes.append(1)
+        score_lw.append(np.mean(bottom_level_score_lw))
+        score.append(np.mean(bottom_level_score))
+        score_W.append(np.mean(bottom_level_score_W))
+        score_WF.append(np.mean(bottom_level_score_WF))
+
+    aggregate_sizes = np.array(aggregate_sizes)
+    score_lw = np.array(score_lw)
+    score = np.array(score)
+    score_W = np.array(score_W)
+    score_WF = np.array(score_WF)
+
+    skill = 100 * (1 - score / score_lw)
+    skill_W = 100 * (1 - score_W / score_lw)
+    skill_WF = 100 * (1 - score_WF / score_lw)
+
+    return skill, skill_W, skill_WF, aggregate_sizes
+
+
+def plot_aggregate_size_benchmark_skill(model, metric):
+    skill, skill_W, skill_WF, aggregate_sizes = get_benchmark_skill_scores(model, metric)
+
+    plt.figure(figsize=(3.5, 4))
+    plt.plot([1, 2500], [0, 0], color='grey', linestyle='dashed')
+    plt.scatter(
+        aggregate_sizes,
+        skill,
+        label='',
+        marker=MARKERS[0],
+        color=get_color(model),
+        edgecolors='none',
+        alpha=1.0
+    )
+    plt.scatter(
+        aggregate_sizes,
+        skill_W,
+        label='W',
+        marker=MARKERS[1],
+        color=get_color(model),
+        edgecolors='none',
+        alpha=0.75
+    )
+    plt.scatter(
+        aggregate_sizes,
+        skill_WF,
+        label='WF',
+        marker=MARKERS[2],
+        color=get_color(model),
+        edgecolors='none',
+        alpha=0.5
+    )
+    plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+    plt.xlabel('\\# aggregated meters')
+    plt.xscale('log')
+    plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
+    plt.title(model)
+    _complete_plot(f"aggregate_size_benchmark_skill_{model}_{metric}", grid=False, legend=False)
 
 
 def plot_coverage(levels=('L0', 'L1', 'L2'), models=None, name=None):
@@ -965,21 +1174,29 @@ def plot_forecast1d(model, level, cluster, number):
     _complete_plot(f'forecast1d_{get_file_name(model, level, cluster)}_number{number}', legend=False, grid=False)
 
 
-def post_hoc_analysis(metric, models=('KD-IC', 'DeepAR')):
+def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR'), L3=True):
     results, info = collect_results()
 
     i = info['metrics'].index(metric)
 
-    better_with_W = np.zeros((len(models), 2500))
-    better_with_WF = np.zeros((len(models), 2500))
+    better_with_W = np.zeros((len(models), 2500 if L3 else 22))
+    better_with_WF = np.zeros((len(models), 2500 if L3 else 22))
     for j, model in enumerate(models):
+        if L3 and 'KF' in model:
+            continue
+
         m = info['models'].index(model)
         m_W = info['models'].index(model + '(+W)')
         m_WF = info['models'].index(model + '(+WF)')
 
-        score = results['L3'][i, m]
-        score_W = results['L3'][i, m_W]
-        score_WF = results['L3'][i, m_WF]
+        if L3:
+            score = results['L3'][i, m]
+            score_W = results['L3'][i, m_W]
+            score_WF = results['L3'][i, m_WF]
+        else:
+            score = np.vstack([results['L0'][i, m], results['L1'][i, m], results['L2'][i, m]])
+            score_W = np.vstack([results['L0'][i, m_W], results['L1'][i, m_W], results['L2'][i, m_W]])
+            score_WF = np.vstack([results['L0'][i, m_WF], results['L1'][i, m_WF], results['L2'][i, m_WF]])
 
         # Check if the scores are consistent per week
         # (i.e whether the model with weather is consistently better or worse for each forecast per time series)
@@ -1000,6 +1217,8 @@ def post_hoc_analysis(metric, models=('KD-IC', 'DeepAR')):
 
         better_with_W[j] = score_W < score
         better_with_WF[j] = score_WF < score
+        percentage_better_with_W = np.mean(better_with_W[j])
+        percentage_better_with_WF = np.mean(better_with_WF[j])
 
         consistency_W_v_WF = np.mean(better_with_W[j] == better_with_WF[j])
 
@@ -1007,8 +1226,8 @@ def post_hoc_analysis(metric, models=('KD-IC', 'DeepAR')):
         score_W = np.mean(score_W)
         score_WF = np.mean(score_WF)
 
-        skill_W = 100 * (1 - post_hoc_score_W / score_W)
-        skill_WF = 100 * (1 - post_hoc_score_WF / score_WF)
+        skill_W = 100 * (1 - post_hoc_score_W / score)
+        skill_WF = 100 * (1 - post_hoc_score_WF / score)
 
         print(model)
         print('======')
@@ -1017,21 +1236,24 @@ def post_hoc_analysis(metric, models=('KD-IC', 'DeepAR')):
         print(f'{metric}(W) = {score_W:.2f}')
         print(f'Post-hoc {metric}(W) = {post_hoc_score_W:.2f}')
         print(f'Post-hoc SS_{metric}(W) = {skill_W:.2f}')
+        print(f'Percentage_improved(W) = {100 * percentage_better_with_W:.2f}')
         print(f'Consistency_across_forecasts(W): {100 * forecast_consistency_W:.2f}')
         print()
         print(f'{metric}(WF) = {score_WF:.2f}')
         print(f'Post-hoc {metric}(WF) = {post_hoc_score_WF:.2f}')
         print(f'Post-hoc SS_{metric}(WF) = {skill_WF:.2f}')
+        print(f'Percentage_improved(WF) = {100 * percentage_better_with_WF:.2f}')
         print(f'Consistency_across_forecasts(WF): {100 * forecast_consistency_WF:.2f}')
         print()
         print(f'Consistency(W vs. WF): {100 * consistency_W_v_WF:.2f}')
         print()
         print()
 
-    consistency_W = np.mean(better_with_W[0] == better_with_W[1])
-    consistency_WF = np.mean(better_with_WF[0] == better_with_WF[1])
+    if L3:
+        consistency_W = np.mean(better_with_W[1] == better_with_W[2])
+        consistency_WF = np.mean(better_with_WF[1] == better_with_WF[2])
 
-    print('Consistency across models')
-    print('==========================')
-    print(f'Consistency(W) = {100 * consistency_W:.2f}')
-    print(f'Consistency(WF) = {100 * consistency_WF:.2f}')
+        print('Consistency across models')
+        print('==========================')
+        print(f'Consistency(W) = {100 * consistency_W:.2f}')
+        print(f'Consistency(WF) = {100 * consistency_WF:.2f}')

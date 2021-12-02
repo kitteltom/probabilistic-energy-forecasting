@@ -22,6 +22,8 @@ WEATHER_VARIABLE_NAMES = {
     'dew_point': 'Dew point [°C]',
     'wind_speed': 'Wind speed [m/s]'
 }
+HORIZON = 192
+
 DECIMALS = 2
 COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2')
 MARKERS = ('o', 'X', 'v', 'd', 'p')
@@ -146,31 +148,38 @@ def daily(x, reduce=False):
     return x_daily
 
 
-def rmae(y_true, y_hat, axis=1):
-    return 100 * np.nanmean(np.abs(y_true - y_hat), axis=axis) / np.nanmean(y_true)
+def mae(y_true, y_hat, axis=1):
+    return np.mean(np.abs(y_true - y_hat), axis=axis)
 
 
 def create_weather_forecast_df(
         weather_variables=tuple(WEATHER_VARIABLE_NAMES.keys()),
         horizons=(1, 2, 3, 4),
+        winter_period=False,
         with_std=True,
         to_LaTeX=True
 ):
-    t_train = main.train_val_split(energy_df.index)[0]
+    t_train, t_val = main.train_val_split(energy_df.index, winter_period=winter_period)
 
     row_names = [WEATHER_VARIABLE_NAMES[weather_variable].split(' [')[0] for weather_variable in weather_variables]
     col_names = [f'{horizon}-day' for horizon in horizons]
 
     weather_forecast_df = pd.DataFrame(index=row_names, columns=col_names, dtype=float)
     for w, weather_variable in enumerate(weather_variables):
-        actual = weather_df.loc[t_train, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
-        forecast = weather_forecast4d_df.loc[t_train, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
+        mu = np.mean(weather_df.loc[t_train, weather_variable].to_numpy(float))
+        sigma = np.std(weather_df.loc[t_train, weather_variable].to_numpy(float))
+
+        actual = weather_df.loc[t_val, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
+        forecast = weather_forecast4d_df.loc[t_val, weather_variable].to_numpy(float).reshape(-1, 4 * S_D)
+
+        actual = utils.standardize(actual, mu, sigma)
+        forecast = utils.standardize(forecast, mu, sigma)
         for h, horizon in enumerate(horizons):
-            idx = np.arange(0, horizon * S_D)
-            mean = np.mean(rmae(actual[:, idx], forecast[:, idx]))
+            idx = np.arange(0, min(HORIZON, horizon * S_D))
+            mean = np.mean(mae(actual[:, idx], forecast[:, idx]))
             weather_forecast_df.iloc[w, h] = (('%%.%sf' % DECIMALS) % mean)
             if with_std:
-                std = np.std(rmae(actual[:, idx], forecast[:, idx]))
+                std = np.std(mae(actual[:, idx], forecast[:, idx]))
                 weather_forecast_df.iloc[w, h] += (' (%%.%sf)' % DECIMALS) % std
 
     if to_LaTeX:
@@ -202,14 +211,17 @@ def r_squared(y, y_hat):
     return 1 - ss_res / ss_tot
 
 
-def lin_reg(X, y, standardize=False):
+def lin_reg(X, y, standardize=False, polynomial=False):
     if X.ndim == 1:
         X = X[:, np.newaxis]
     if standardize:
         X_mean = np.mean(X, axis=0, keepdims=True)
         X_std = np.std(X, axis=0, keepdims=True)
         X = utils.standardize(X, X_mean, X_std)
-    X = np.hstack([X, np.ones((len(X), 1))])
+    if not polynomial:
+        X = np.hstack([X, np.ones((len(X), 1))])
+    else:
+        X = np.hstack([X**2, X, np.ones((len(X), 1))])
     w = np.linalg.inv(X.T @ X) @ X.T @ y
     y_hat = X @ w
     return y_hat, w
