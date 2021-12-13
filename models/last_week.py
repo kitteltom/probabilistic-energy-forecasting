@@ -1,4 +1,3 @@
-import numpy as np
 import time
 
 from models.forecast_model import ForecastModel
@@ -20,7 +19,7 @@ class LastWeek(ForecastModel):
 
     def predict(self, t, u=None):
         """
-        Predicts the observation at timestamp(s) t by taking the observations(s) from the previous week.
+        Predicts the observation at timestamp(s) t by taking the observation(s) from the previous week.
         """
         if super().predict(t, u):
             return
