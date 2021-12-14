@@ -24,20 +24,23 @@ MODEL_NAMES = {
     'KD-IC': ('KD-IC', ''),
     'KD-IC(+W)': ('KD-IC', '_W'),
     'KD-IC(+WF)': ('KD-IC', '_WF'),
-    'LN-IC': ('LogNormal-IC', ''),
-    'LN-IC(+W)': ('LogNormal-IC', '_W'),
-    'LN-IC(+WF)': ('LogNormal-IC', '_WF'),
+    # 'LN-IC': ('LogNormal-IC', ''),
+    # 'LN-IC(+W)': ('LogNormal-IC', '_W'),
+    # 'LN-IC(+WF)': ('LogNormal-IC', '_WF'),
     'DeepAR': ('DeepAR', ''),
     'DeepAR(+W)': ('DeepAR', '_W'),
     'DeepAR(+WF)': ('DeepAR', '_WF'),
-    'LW': ('LastWeek', '')
+    'LWR': ('LastWeekRegression', ''),
+    'LWR(+W)': ('LastWeekRegression', '_W'),
+    'LWR(+WF)': ('LastWeekRegression', '_WF'),
+    'LW': ('LastWeek', ''),
 }
 MAIN_SEED = '42'
 FORECAST_REPS = 28
 HORIZON = 192
 
 DECIMALS = 2
-COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2')
+COLORS = ('#5e3c99', '#fdb863', '#e66101', '#b2abd2', '#000000')
 MARKERS = ('o', 'X', 'v', 'd', 'p')
 LINESTYLES = ('solid', 'dashed', 'dashdot')
 S_D = 48
@@ -63,10 +66,7 @@ def load_res(model, level, cluster, seed=''):
 def collect_results(
         levels=('L0', 'L1', 'L2', 'L3'),
         metrics=('MAPE', 'rMAE', 'rRMSE', 'rCRPS'),
-        models=('KF', 'KF(+W)', 'KF(+WF)',
-                'KD-IC', 'KD-IC(+W)', 'KD-IC(+WF)',
-                'DeepAR', 'DeepAR(+W)', 'DeepAR(+WF)',
-                'LW'),
+        models=MODEL_NAMES.keys(),
         seeds=(0, 1, 2, 3, 4),
         save_results_with_info=True
 ):
@@ -120,10 +120,7 @@ def collect_results(
 def collect_results_per_tstp(
         levels=('L0', 'L1', 'L2'),
         metrics=('rMAE', 'rRMSE', 'rCRPS'),
-        models=('KF', 'KF(+W)', 'KF(+WF)',
-                'KD-IC', 'KD-IC(+W)', 'KD-IC(+WF)',
-                'DeepAR', 'DeepAR(+W)', 'DeepAR(+WF)',
-                'LW'),
+        models=MODEL_NAMES.keys(),
         seeds=(0, 1, 2, 3, 4),
         save_results_per_tstp_with_info=True
 ):
@@ -233,7 +230,7 @@ def create_level_df(level, with_std=True, to_LaTeX=True):
     return level_df
 
 
-def create_runtime_df(models=('KF', 'KD-IC', 'DeepAR', 'LW'), with_std=False, to_LaTeX=True):
+def create_runtime_df(models=('KF', 'KD-IC', 'DeepAR', 'LWR'), with_std=False, to_LaTeX=True):
     _, info = collect_results()
 
     train_name = 'Avg. training time [s]'
@@ -281,7 +278,7 @@ def get_color(model):
         return COLORS[1]
     elif 'DeepAR' in model:
         return COLORS[2]
-    elif 'LW' in model:
+    elif 'LWR' in model:
         return COLORS[3]
     else:
         return COLORS[4]
@@ -421,6 +418,7 @@ def plot_score_comparison(model, metric1, metric2, levels=('L0', 'L1', 'L2')):
         edgecolors='none',
         alpha=1.0
     )
+    print(f'Correlation: {data_analysis.correlation(scores[0], scores[1]):.3f}')
     plt.scatter(
         scores_W[0],
         scores_W[1],
@@ -429,6 +427,7 @@ def plot_score_comparison(model, metric1, metric2, levels=('L0', 'L1', 'L2')):
         edgecolors='none',
         alpha=0.75
     )
+    print(f'Correlation (W): {data_analysis.correlation(scores_W[0], scores_W[1]):.3f}')
     plt.scatter(
         scores_WF[0],
         scores_WF[1],
@@ -437,6 +436,7 @@ def plot_score_comparison(model, metric1, metric2, levels=('L0', 'L1', 'L2')):
         edgecolors='none',
         alpha=0.5
     )
+    print(f'Correlation (WF): {data_analysis.correlation(scores_WF[0], scores_WF[1]):.3f}')
     plt.ylabel(metric2)
     plt.xlabel(metric1)
     _complete_plot(f"comparison_{model}_{metric1}_{metric2}", grid=False, legend=False)
@@ -594,7 +594,7 @@ def plot_aggregate_size(metric, models=None, name=None):
             color=get_color(model)
         )
     plt.ylabel(metric)
-    plt.yticks(np.arange(0, 70, 20))
+    # plt.yticks(np.arange(0, 70, 20))
     plt.xlabel('\\# aggregated meters')
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
@@ -1167,14 +1167,175 @@ def plot_forecast1d(model, level, cluster, number):
 
     # Axes
     plt.ylabel('Energy [kWh]')
-    plt.title(f'{level}: {cluster}')
+    plt.title(f'{model}, {level}')
     plt.xlabel('Time of day')
     ticks = np.array(t[2:S_D:10].map(lambda x: x.strftime('%H:%M')))
     plt.xticks(np.arange(2, S_D, 10) + 1, ticks, rotation=0)
     _complete_plot(f'forecast1d_{get_file_name(model, level, cluster)}_number{number}', legend=False, grid=False)
 
 
-def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR'), L3=True):
+def plot_household_level_weather_effect(
+        metric, model,
+        demographics=True,
+        lags=None,
+        weather_vars=None
+):
+    level = 'L3'
+    results, info = collect_results()
+
+    t = data_analysis.energy_df.index
+    clusters = info['levels'][level]['clusters']
+
+    i = info['metrics'].index(metric)
+
+    m = info['models'].index(model)
+    m_W = info['models'].index(model + '(+W)')
+    m_WF = info['models'].index(model + '(+WF)')
+
+    score = results[level][i, m]
+    score_W = results[level][i, m_W]
+    score_WF = results[level][i, m_WF]
+
+    score = np.mean(score, axis=1)
+    score_W = np.mean(score_W, axis=1)
+    score_WF = np.mean(score_WF, axis=1)
+
+    skill_W = 100 * (1 - score_W / score)
+    skill_WF = 100 * (1 - score_WF / score)
+
+    # Calculate overall percentage improved
+    print(f'Percentage improved (W): {np.mean(score_W < score)}')
+    print(f'Percentage improved (WF): {np.mean(score_WF < score)}')
+    print()
+
+    if demographics:
+        # Calculate percentage improved per category/group
+        parents = np.array(info['levels'][level]['parents'])
+        grandparents = []
+        for parent in parents:
+            parent_idx = info['levels']['L2']['clusters'].index(parent)
+            grandparents.append(info['levels']['L2']['parents'][parent_idx])
+        grandparents = np.array(grandparents)
+
+        p_map_W = {}
+        p_map_WF = {}
+        for p in np.unique(parents):
+            p_idx = np.where(parents == p)[0]
+            p_map_W[p[-1]] = np.mean(score_W[p_idx] < score[p_idx])
+            p_map_WF[p[-1]] = np.mean(score_WF[p_idx] < score[p_idx])
+
+        plt.figure(figsize=(6, 4))
+        plt.bar(p_map_W.keys(), p_map_W.values(), color=get_color(model))
+        plt.ylabel('Percentage improved')
+        plt.xlabel('Acorn group')
+        plt.title('Actual weather')
+        _complete_plot(f'household_group_{metric}_{model}_W', legend=False, grid=False)
+
+        plt.figure(figsize=(6, 4))
+        plt.bar(p_map_WF.keys(), p_map_WF.values(), color=get_color(model))
+        plt.ylabel('Percentage improved')
+        plt.xlabel('Acorn group')
+        plt.title('Weather forecast')
+        _complete_plot(f'household_group_{metric}_{model}_WF', legend=False, grid=False)
+
+        gp_map_W = {}
+        gp_map_WF = {}
+        for gp in np.unique(grandparents):
+            gp_idx = np.where(grandparents == gp)[0]
+            gp_map_W[gp] = np.mean(score_W[gp_idx] < score[gp_idx])
+            gp_map_WF[gp] = np.mean(score_WF[gp_idx] < score[gp_idx])
+
+        plt.figure(figsize=(6, 4))
+        plt.bar(gp_map_W.keys(), gp_map_W.values(), color=get_color(model))
+        plt.ylabel('Percentage improved')
+        plt.xlabel('Acorn category')
+        plt.title('Actual weather')
+        _complete_plot(f'household_category_{metric}_{model}_W', legend=False, grid=False)
+
+        plt.figure(figsize=(6, 4))
+        plt.bar(gp_map_WF.keys(), gp_map_WF.values(), color=get_color(model))
+        plt.ylabel('Percentage improved')
+        plt.xlabel('Acorn category')
+        plt.title('Weather forecast')
+        _complete_plot(f'household_category_{metric}_{model}_WF', legend=False, grid=False)
+
+    # Plot correlation of autocorrelation and score difference
+    if lags is None:
+        lags = []
+    for lag in lags:
+        auto_corr = []
+        for cluster in clusters:
+            y = data_analysis.get_observations_at(level, cluster, t)
+            auto_corr.append(data_analysis.autocorrelation(y, lag=lag))
+
+        plt.figure(figsize=(6, 4))
+        plt.scatter(
+            auto_corr,
+            skill_W,
+            color=get_color(model),
+            s=1,
+            alpha=0.8,
+            label=f'corr = {data_analysis.correlation(auto_corr, skill_W):.3f}'
+        )
+        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.xlabel(f'Autocorrelation (Lag = {lag})')
+        plt.title('Actual weather')
+        _complete_plot(f'household_autocorrelation{lag}_{metric}_{model}_W', legend=True, grid=True)
+
+        plt.figure(figsize=(6, 4))
+        plt.scatter(
+            auto_corr,
+            skill_WF,
+            color=get_color(model),
+            s=1,
+            alpha=0.8,
+            label=f'corr = {data_analysis.correlation(auto_corr, skill_WF):.3f}'
+        )
+        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.xlabel(f'Autocorrelation (Lag = {lag})')
+        plt.title('Weather forecast')
+        _complete_plot(f'household_autocorrelation{lag}_{metric}_{model}_WF', legend=True, grid=True)
+
+    # Plot correlation of weather variable correlation and score difference
+    if weather_vars is None:
+        weather_vars = []
+    for var_name in weather_vars:
+        var = data_analysis.daily(np.array(data_analysis.weather_df.loc[t, var_name]), reduce=True)
+        var_corr = []
+        for cluster in clusters:
+            y = data_analysis.daily(np.array(data_analysis.get_observations_at(level, cluster, t)), reduce=True)
+            var_corr.append(data_analysis.correlation(var, y) ** 2)
+
+        plt.figure(figsize=(6, 4))
+        plt.scatter(
+            var_corr,
+            skill_W,
+            color=get_color(model),
+            s=1,
+            alpha=0.8,
+            label=f'corr = {data_analysis.correlation(var_corr, skill_W):.3f}'
+        )
+        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.xlabel(f'Squared {var_name.replace("_", " ")} correlation [$R^2$]')
+        plt.title('Actual weather')
+        _complete_plot(f'household_{var_name}_{metric}_{model}_W', legend=True, grid=True)
+
+        plt.figure(figsize=(6, 4))
+        plt.scatter(
+            var_corr,
+            skill_WF,
+            color=get_color(model),
+            s=1,
+            alpha=0.8,
+            label=f'corr = {data_analysis.correlation(var_corr, skill_WF):.3f}'
+        )
+        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.xlabel(f'Squared {var_name.replace("_", " ")} correlation [$R^2$]')
+        plt.title('Weather forecast')
+        _complete_plot(f'household_{var_name}_{metric}_{model}_WF', legend=True, grid=True)
+
+
+def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR', 'LWR'), L3=True):
     results, info = collect_results()
 
     i = info['metrics'].index(metric)

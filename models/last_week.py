@@ -2,6 +2,7 @@ import time
 
 from models.forecast_model import ForecastModel
 from distributions.point import Point
+import utils
 
 
 class LastWeek(ForecastModel):
@@ -26,7 +27,7 @@ class LastWeek(ForecastModel):
         start_time = time.time()
 
         last_week_idx = self.idx(t, relative=False) - self.s_w
-        y_hat = self.y[last_week_idx]
+        y_hat = utils.interpolate_nans(self.y[last_week_idx])
         self.predictions[(t[0], t[-1])] = [y_hat]
 
         self.results[0]['prediction_time'].append(time.time() - start_time)
