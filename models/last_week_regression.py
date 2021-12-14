@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import cho_factor, cho_solve
 import datetime as dt
 import time
 
@@ -9,7 +10,7 @@ import utils
 
 class LastWeekRegression(ForecastModel):
     """
-    Implements a naive benchmark that uses the observations from the previous week as a point forecast.
+    Implements a simple linear regression forecast model with various optional feature vectors.
     """
     def __init__(self, y, t, u=None, ID=''):
         super().__init__(y, t, u, ID, distribution=LogNormal)
@@ -29,6 +30,7 @@ class LastWeekRegression(ForecastModel):
             (self.weather_polynomial_degree * u.shape[1]) if u is not None else 0
         )
 
+        self.lam = 1e-3
         self.coefficients = np.zeros((
             self.s_d,
             self.num_features
@@ -40,6 +42,9 @@ class LastWeekRegression(ForecastModel):
 
     @staticmethod
     def get_weekday_mask(t, weekday):
+        """
+        Returns an array that masks the weekday in t.
+        """
         return np.array([1.0 if tstp.weekday() == weekday else 0.0 for tstp in t])
 
     def phi(self, y_lw, t, u=None):
@@ -79,6 +84,7 @@ class LastWeekRegression(ForecastModel):
 
         # Weather polynomials
         if u is not None:
+            u = utils.standardize(u, self.u_mean, self.u_std)
             for weather_var in u.T:
                 start_idx = feature_count
                 end_idx = feature_count + self.weather_polynomial_degree
@@ -92,10 +98,11 @@ class LastWeekRegression(ForecastModel):
 
     def lin_reg(self, Y, y_lw, t, u=None):
         """
-        Return the linear regression coefficients for the data X, with labels Y.
+        Return the linear regression coefficients for the features X, with labels Y.
         """
         X = self.phi(y_lw, t, u)
-        coefficients = np.linalg.inv(X.T @ X) @ X.T @ np.log(Y)
+        I = np.eye(self.num_features)
+        coefficients = cho_solve(cho_factor(X.T @ X + self.lam * I), X.T @ np.log(Y))
         sigma2_y = np.mean((np.log(Y) - X @ coefficients)**2)
         return coefficients, sigma2_y
 
@@ -129,7 +136,7 @@ class LastWeekRegression(ForecastModel):
 
     def predict(self, t, u=None):
         """
-        Predicts the observation at timestamp(s) t by taking the observation(s) from the previous week.
+        Predicts the observation at timestamp(s) t by linear regression.
         """
         if super().predict(t, u):
             return

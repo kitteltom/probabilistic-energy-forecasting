@@ -7,6 +7,7 @@ from models.kalman_filter import KalmanFilter
 from models.kd_ic import KDIC
 from models.log_normal_ic import LogNormalIC
 from models.deep_ar import DeepAR
+from models.last_week_regression import LastWeekRegression
 from models.last_week import LastWeek
 
 DATA_PATH = './data/'
@@ -41,7 +42,7 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default='KF',
-                        help='The model to use for forecasting (KF, KD, LN, DeepAR, LW)')
+                        help='The model to use for forecasting (KF, KD, LN, DeepAR, LWR, LW)')
     parser.add_argument("--level", nargs='+', default=[0], type=int,
                         help='List of levels in the hierarchy for which forecasts should be produced '
                              '(0 for the aggregated data, 1 for the ACORN categories, 2 for the ACORN groups, '
@@ -145,6 +146,8 @@ def main():
             kwargs["num_layers"] = 2
             kwargs["num_cells"] = 40
             kwargs["batch_size"] = 64
+    elif args.model == 'LWR':
+        ForecastModel = LastWeekRegression
     elif args.model == 'LW':
         ForecastModel = LastWeek
     else:
