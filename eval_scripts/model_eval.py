@@ -318,6 +318,47 @@ def plot_epoch_loss(model, level, cluster, seed=MAIN_SEED):
     _complete_plot(f'epoch_loss_{get_file_name(model, level, cluster, seed)}', grid=False)
 
 
+def plot_level_bars(level, metric):
+    results, info = collect_results()
+
+    i = info['metrics'].index(metric)
+    models = []
+    means = []
+
+    plt.figure(figsize=(6, 3.5))
+    for m, model in enumerate(info['models']):
+        if model == 'LW':
+            continue
+        else:
+            models.append(model)
+
+        if '(+W)' in model:
+            hatch = '//'
+        elif '(+WF)' in model:
+            hatch = 'xx'
+        else:
+            hatch = None
+
+        mean = np.mean(results[level][i, m])
+        if not np.isnan(mean):
+            means.append(mean)
+            plt.bar(
+                x=[m],
+                height=[mean],
+                facecolor=get_color(model),
+                hatch=hatch,
+                edgecolor='white'
+            )
+
+    plt.ylabel(metric)
+    plt.ylim((min(means) - 0.15 * np.mean(means), max(means) + 0.05 * np.mean(means)))
+    plt.xlim((-0.6, len(models) - 0.4))
+    plt.xticks(np.arange(1, len(models), 3), models[::3], rotation=0)
+    plt.grid(axis='y')
+    plt.title(level)
+    _complete_plot(f'level_bars_{level}_{metric}', legend=False, grid=False)
+
+
 def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')):
     results, info = collect_results_per_tstp()
     model_W = model + '(+W)'
@@ -375,7 +416,7 @@ def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')
         color=get_color(model_WF),
         marker=MARKERS[2]
     )
-    # plt.ylim(6.95, 8.35)
+    plt.ylim((6.95, 8.45))
     plt.ylabel(metric)
     plt.xlabel('Horizon')
     plt.xticks(np.arange(len(horizons)), np.array(horizons))
@@ -727,6 +768,7 @@ def plot_aggregate_size_skill(model, metric):
     #     label=f'{corr_WF:.2f}'
     # )
     plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+    # plt.ylim((-3, 3))
     plt.xlabel('\\# aggregated meters')
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
@@ -770,11 +812,10 @@ def plot_temperature_correlation_skill(model, metric):
 
 
 def get_benchmark_skill_scores(model, metric, no_L3=False):
-    assert 'CRPS' not in metric
     results, info = collect_results()
 
     i = info['metrics'].index(metric)
-    lw = info['models'].index('LW')
+    lw = info['models'].index('LWR')
     m = info['models'].index(model)
     m_W = info['models'].index(model + '(+W)')
     m_WF = info['models'].index(model + '(+WF)')
@@ -859,6 +900,7 @@ def plot_aggregate_size_benchmark_skill(model, metric):
     )
     plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
     plt.xlabel('\\# aggregated meters')
+    plt.ylim((-27, 27))
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
     plt.title(model)
@@ -1125,7 +1167,7 @@ def plot_forecast1d(model, level, cluster, number):
     t = pd.date_range(start=t0, periods=len(p_50), freq='30min')
     y = data_analysis.get_observations_at(level, cluster, t)
 
-    plt.figure(figsize=(5, 4))
+    plt.figure(figsize=(3.5, 3))
 
     # Point forecast
     plt.plot(
@@ -1162,21 +1204,23 @@ def plot_forecast1d(model, level, cluster, number):
         y,
         color='grey',
         label='Observations',
-        s=7
+        s=5
     )
 
     # Axes
     plt.ylabel('Energy [kWh]')
     plt.title(f'{model}, {level}')
     plt.xlabel('Time of day')
-    ticks = np.array(t[2:S_D:10].map(lambda x: x.strftime('%H:%M')))
-    plt.xticks(np.arange(2, S_D, 10) + 1, ticks, rotation=0)
+    ticks = np.array(t[2:S_D:14].map(lambda x: x.strftime('%H:%M')))
+    plt.xticks(np.arange(2, S_D, 14), ticks, rotation=0)
     _complete_plot(f'forecast1d_{get_file_name(model, level, cluster)}_number{number}', legend=False, grid=False)
 
 
 def plot_household_level_weather_effect(
         metric, model,
-        demographics=True,
+        weather='W',
+        compare_scores=False,
+        demographics=False,
         lags=None,
         weather_vars=None
 ):
@@ -1189,24 +1233,37 @@ def plot_household_level_weather_effect(
     i = info['metrics'].index(metric)
 
     m = info['models'].index(model)
-    m_W = info['models'].index(model + '(+W)')
-    m_WF = info['models'].index(model + '(+WF)')
+    m_W = info['models'].index(model + f'(+{weather})')
 
     score = results[level][i, m]
     score_W = results[level][i, m_W]
-    score_WF = results[level][i, m_WF]
 
     score = np.mean(score, axis=1)
     score_W = np.mean(score_W, axis=1)
-    score_WF = np.mean(score_WF, axis=1)
 
     skill_W = 100 * (1 - score_W / score)
-    skill_WF = 100 * (1 - score_WF / score)
 
     # Calculate overall percentage improved
-    print(f'Percentage improved (W): {np.mean(score_W < score)}')
-    print(f'Percentage improved (WF): {np.mean(score_WF < score)}')
-    print()
+    print(f'Percentage improved ({weather}): {100 * np.mean(score_W < score)}')
+
+    if compare_scores:
+        plt.figure(figsize=(4.5, 4))
+        min_score = 0  # min(min(score), min(score_W))
+        max_score = max(max(score), max(score_W))
+        plt.plot([min_score, max_score], [min_score, max_score], color='grey', linestyle='dashed')
+        plt.scatter(
+            score,
+            score_W,
+            color=get_color(model),
+            s=1,
+            alpha=0.8
+        )
+        plt.ylabel(f'{metric} (+{weather})')
+        plt.xlabel(f'{metric}')
+        plt.ylim((0, 120))
+        plt.xlim((0, 120))
+        plt.title(model)
+        _complete_plot(f'household_score_comparison_{metric}_{model}_{weather}', legend=False, grid=False)
 
     if demographics:
         # Calculate percentage improved per category/group
@@ -1218,46 +1275,28 @@ def plot_household_level_weather_effect(
         grandparents = np.array(grandparents)
 
         p_map_W = {}
-        p_map_WF = {}
         for p in np.unique(parents):
             p_idx = np.where(parents == p)[0]
             p_map_W[p[-1]] = np.mean(score_W[p_idx] < score[p_idx])
-            p_map_WF[p[-1]] = np.mean(score_WF[p_idx] < score[p_idx])
 
         plt.figure(figsize=(6, 4))
         plt.bar(p_map_W.keys(), p_map_W.values(), color=get_color(model))
         plt.ylabel('Percentage improved')
         plt.xlabel('Acorn group')
-        plt.title('Actual weather')
-        _complete_plot(f'household_group_{metric}_{model}_W', legend=False, grid=False)
-
-        plt.figure(figsize=(6, 4))
-        plt.bar(p_map_WF.keys(), p_map_WF.values(), color=get_color(model))
-        plt.ylabel('Percentage improved')
-        plt.xlabel('Acorn group')
-        plt.title('Weather forecast')
-        _complete_plot(f'household_group_{metric}_{model}_WF', legend=False, grid=False)
+        plt.title(model)
+        _complete_plot(f'household_group_{metric}_{model}_{weather}', legend=False, grid=False)
 
         gp_map_W = {}
-        gp_map_WF = {}
         for gp in np.unique(grandparents):
             gp_idx = np.where(grandparents == gp)[0]
             gp_map_W[gp] = np.mean(score_W[gp_idx] < score[gp_idx])
-            gp_map_WF[gp] = np.mean(score_WF[gp_idx] < score[gp_idx])
 
         plt.figure(figsize=(6, 4))
         plt.bar(gp_map_W.keys(), gp_map_W.values(), color=get_color(model))
         plt.ylabel('Percentage improved')
         plt.xlabel('Acorn category')
-        plt.title('Actual weather')
-        _complete_plot(f'household_category_{metric}_{model}_W', legend=False, grid=False)
-
-        plt.figure(figsize=(6, 4))
-        plt.bar(gp_map_WF.keys(), gp_map_WF.values(), color=get_color(model))
-        plt.ylabel('Percentage improved')
-        plt.xlabel('Acorn category')
-        plt.title('Weather forecast')
-        _complete_plot(f'household_category_{metric}_{model}_WF', legend=False, grid=False)
+        plt.title(model)
+        _complete_plot(f'household_category_{metric}_{model}_{weather}', legend=False, grid=False)
 
     # Plot correlation of autocorrelation and score difference
     if lags is None:
@@ -1268,33 +1307,26 @@ def plot_household_level_weather_effect(
             y = data_analysis.get_observations_at(level, cluster, t)
             auto_corr.append(data_analysis.autocorrelation(y, lag=lag))
 
-        plt.figure(figsize=(6, 4))
+        f = plt.figure(figsize=(4.5, 4))
+        ax = f.add_subplot(111)
+        plt.plot([min(auto_corr), max(auto_corr)], [0, 0], color='grey', linestyle='dashed')
         plt.scatter(
             auto_corr,
             skill_W,
             color=get_color(model),
             s=1,
-            alpha=0.8,
-            label=f'corr = {data_analysis.correlation(auto_corr, skill_W):.3f}'
+            alpha=0.8
         )
+        plt.text(0.94, 0.06, f'corr = {data_analysis.correlation(auto_corr, skill_W):.3f}',
+                 horizontalalignment='right',
+                 verticalalignment='bottom',
+                 transform=ax.transAxes,
+                 fontsize=18,
+                 bbox=dict(facecolor='white', edgecolor='grey', boxstyle='round', alpha=0.5))
         plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
         plt.xlabel(f'Autocorrelation (Lag = {lag})')
-        plt.title('Actual weather')
-        _complete_plot(f'household_autocorrelation{lag}_{metric}_{model}_W', legend=True, grid=True)
-
-        plt.figure(figsize=(6, 4))
-        plt.scatter(
-            auto_corr,
-            skill_WF,
-            color=get_color(model),
-            s=1,
-            alpha=0.8,
-            label=f'corr = {data_analysis.correlation(auto_corr, skill_WF):.3f}'
-        )
-        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
-        plt.xlabel(f'Autocorrelation (Lag = {lag})')
-        plt.title('Weather forecast')
-        _complete_plot(f'household_autocorrelation{lag}_{metric}_{model}_WF', legend=True, grid=True)
+        plt.title(model)
+        _complete_plot(f'household_autocorrelation{lag}_{metric}_{model}_{weather}', legend=False, grid=False)
 
     # Plot correlation of weather variable correlation and score difference
     if weather_vars is None:
@@ -1306,33 +1338,33 @@ def plot_household_level_weather_effect(
             y = data_analysis.daily(np.array(data_analysis.get_observations_at(level, cluster, t)), reduce=True)
             var_corr.append(data_analysis.correlation(var, y) ** 2)
 
-        plt.figure(figsize=(6, 4))
+        skill_W_50 = skill_W[np.array(var_corr) >= 0.5]
+        print(f'Percentage improved (R2 > 0.5, {var_name.replace("_", " ")}): {100 * np.mean(skill_W_50 > 0):.3f}')
+        print(f'Skill score (R2 > 0.5, {var_name.replace("_", " ")}): {np.mean(skill_W_50):.3f}')
+
+        f = plt.figure(figsize=(4.5, 4))
+        ax = f.add_subplot(111)
+        plt.plot([min(var_corr), max(var_corr)], [0, 0], color='grey', linestyle='dashed')
         plt.scatter(
             var_corr,
             skill_W,
             color=get_color(model),
             s=1,
-            alpha=0.8,
-            label=f'corr = {data_analysis.correlation(var_corr, skill_W):.3f}'
+            alpha=0.8
         )
+        plt.text(0.94, 0.06, f'corr = {data_analysis.correlation(var_corr, skill_W):.3f}',
+                 horizontalalignment='right',
+                 verticalalignment='bottom',
+                 transform=ax.transAxes,
+                 fontsize=18,
+                 bbox=dict(facecolor='white', edgecolor='grey', boxstyle='round', alpha=0.5))
         plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.ylim((-25, 25))
         plt.xlabel(f'Squared {var_name.replace("_", " ")} correlation [$R^2$]')
-        plt.title('Actual weather')
-        _complete_plot(f'household_{var_name}_{metric}_{model}_W', legend=True, grid=True)
+        plt.title(model)
+        _complete_plot(f'household_{var_name}_{metric}_{model}_{weather}', legend=False, grid=False)
 
-        plt.figure(figsize=(6, 4))
-        plt.scatter(
-            var_corr,
-            skill_WF,
-            color=get_color(model),
-            s=1,
-            alpha=0.8,
-            label=f'corr = {data_analysis.correlation(var_corr, skill_WF):.3f}'
-        )
-        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
-        plt.xlabel(f'Squared {var_name.replace("_", " ")} correlation [$R^2$]')
-        plt.title('Weather forecast')
-        _complete_plot(f'household_{var_name}_{metric}_{model}_WF', legend=True, grid=True)
+    print()
 
 
 def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR', 'LWR'), L3=True):
@@ -1411,10 +1443,20 @@ def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR', 'LWR'), L3=True):
         print()
 
     if L3:
-        consistency_W = np.mean(better_with_W[1] == better_with_W[2])
-        consistency_WF = np.mean(better_with_WF[1] == better_with_WF[2])
+        consistency_W_KD_DeepAR = np.mean(better_with_W[1] == better_with_W[2])
+        consistency_WF_KD_DeepAR = np.mean(better_with_WF[1] == better_with_WF[2])
+
+        consistency_W_KD_LWR = np.mean(better_with_W[1] == better_with_W[3])
+        consistency_WF_KD_LWR = np.mean(better_with_WF[1] == better_with_WF[3])
+
+        consistency_W_DeepAR_LWR = np.mean(better_with_W[2] == better_with_W[3])
+        consistency_WF_DeepAR_LWR = np.mean(better_with_WF[2] == better_with_WF[3])
 
         print('Consistency across models')
         print('==========================')
-        print(f'Consistency(W) = {100 * consistency_W:.2f}')
-        print(f'Consistency(WF) = {100 * consistency_WF:.2f}')
+        print(f'Consistency - KD-IC vs. DeepAR (W) = {100 * consistency_W_KD_DeepAR:.2f}')
+        print(f'Consistency - KD-IC vs. DeepAR (WF) = {100 * consistency_WF_KD_DeepAR:.2f}')
+        print(f'Consistency - KD-IC vs. LWR (W) = {100 * consistency_W_KD_LWR:.2f}')
+        print(f'Consistency - KD-IC vs. LWR (WF) = {100 * consistency_WF_KD_LWR:.2f}')
+        print(f'Consistency - DeepAR vs. LWR (W) = {100 * consistency_W_DeepAR_LWR:.2f}')
+        print(f'Consistency - DeepAR vs. LWR (WF) = {100 * consistency_WF_DeepAR_LWR:.2f}')
