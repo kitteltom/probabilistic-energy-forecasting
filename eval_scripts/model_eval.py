@@ -392,10 +392,10 @@ def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')
         score_W[h] = np.nanmean(res_W)
         score_WF[h] = np.nanmean(res_WF)
 
-    skill_W = 100 * (1 - score_W / score)
-    skill_WF = 100 * (1 - score_WF / score)
-    print(f'SS_{metric} (W): {skill_W}')
-    print(f'SS_{metric} (WF): {skill_WF}')
+    wes_W = 100 * (1 - score_W / score)
+    wes_WF = 100 * (1 - score_WF / score)
+    print(f'WES_{metric} (W): {wes_W}')
+    print(f'WES_{metric} (WF): {wes_WF}')
 
     plt.figure(figsize=(3.5, 4))
     plt.plot(
@@ -416,7 +416,8 @@ def plot_horizon(model, metric, horizons=(1, 2, 3, 4), levels=('L0', 'L1', 'L2')
         color=get_color(model_WF),
         marker=MARKERS[2]
     )
-    plt.ylim((6.95, 8.45))
+    # plt.ylim((6.95, 8.45))
+    # plt.ylim((4.95, 5.85))
     plt.ylabel(metric)
     plt.xlabel('Horizon')
     plt.xticks(np.arange(len(horizons)), np.array(horizons))
@@ -642,7 +643,7 @@ def plot_aggregate_size(metric, models=None, name=None):
     _complete_plot(f"aggregate_size_{f'{name}_' if name is not None else ''}{metric}", grid=False)
 
 
-def get_skill_scores(model, metric, no_L3=False):
+def get_weather_effect_scores(model, metric, no_L3=False):
     results, info = collect_results()
 
     i = info['metrics'].index(metric)
@@ -712,28 +713,17 @@ def get_skill_scores(model, metric, no_L3=False):
     corr_W = np.array(corr_W)
     corr_WF = np.array(corr_WF)
 
-    skill_W = 100 * (1 - score_W / score)
-    skill_WF = 100 * (1 - score_WF / score)
+    wes_W = 100 * (1 - score_W / score)
+    wes_WF = 100 * (1 - score_WF / score)
 
-    return skill_W, skill_WF, aggregate_sizes, corr_W, corr_WF
+    return wes_W, wes_WF, aggregate_sizes, corr_W, corr_WF
 
 
-def plot_aggregate_size_skill(model, metric):
-    skill_W, skill_WF, aggregate_sizes, _, _ = get_skill_scores(model, metric)
+def plot_aggregate_size_weather_effect(model, metric):
+    wes_W, wes_WF, aggregate_sizes, _, _ = get_weather_effect_scores(model, metric)
 
-    # # Regression
-    # x = np.logspace(np.log10(min(aggregate_sizes)), np.log10(max(aggregate_sizes)), 100)
-    # X = x[:, np.newaxis]
-    # X = np.hstack([np.log(X), np.ones((len(X), 1))])
-    #
-    # _, w_W = data_analysis.lin_reg(np.log(aggregate_sizes), skill_W, standardize=False, polynomial=False)
-    # y_W = X @ w_W
-    #
-    # _, w_WF = data_analysis.lin_reg(np.log(aggregate_sizes), skill_WF, standardize=False, polynomial=False)
-    # y_WF = X @ w_WF
-
-    corr_W = data_analysis.correlation(np.log(aggregate_sizes), skill_W)
-    corr_WF = data_analysis.correlation(np.log(aggregate_sizes), skill_WF)
+    corr_W = data_analysis.correlation(np.log(aggregate_sizes), wes_W)
+    corr_WF = data_analysis.correlation(np.log(aggregate_sizes), wes_WF)
     print(f'Correlation (W): {corr_W:.3f}')
     print(f'Correlation (WF): {corr_WF:.3f}')
 
@@ -741,45 +731,32 @@ def plot_aggregate_size_skill(model, metric):
     plt.plot([1, 2500], [0, 0], color='grey', linestyle='dashed')
     plt.scatter(
         aggregate_sizes,
-        skill_W,
+        wes_W,
         marker=MARKERS[0],
         color=get_color(model),
         edgecolors='none'
     )
-    # plt.plot(
-    #     x,
-    #     y_W,
-    #     color=get_color(model),
-    #     label=f'{corr_W:.2f}'
-    # )
     plt.scatter(
         aggregate_sizes,
-        skill_WF,
+        wes_WF,
         marker=MARKERS[1],
         color=get_color(model),
         edgecolors='none',
         alpha=0.5
     )
-    # plt.plot(
-    #     x,
-    #     y_WF,
-    #     color=get_color(model),
-    #     alpha=0.5,
-    #     label=f'{corr_WF:.2f}'
-    # )
-    plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+    plt.ylabel(f'$\\mathrm{{WES}}_{{\\mathrm{{{metric}}}}}$')
     # plt.ylim((-3, 3))
     plt.xlabel('\\# aggregated meters')
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
     plt.title(model)
-    _complete_plot(f"aggregate_size_skill_{model}_{metric}", grid=False, legend=False)
+    _complete_plot(f"aggregate_size_weather_effect_{model}_{metric}", grid=False, legend=False)
 
 
-def plot_temperature_correlation_skill(model, metric):
-    skill_W, skill_WF, _, corr_W, corr_WF = get_skill_scores(model, metric, no_L3=True)
-    print(f'Correlation (W): {data_analysis.correlation(corr_W, skill_W):.3f}')
-    print(f'Correlation (WF): {data_analysis.correlation(corr_WF, skill_WF):.3f}')
+def plot_temperature_correlation_weather_effect(model, metric):
+    wes_W, wes_WF, _, corr_W, corr_WF = get_weather_effect_scores(model, metric, no_L3=True)
+    print(f'Correlation (W): {data_analysis.correlation(corr_W, wes_W):.3f}')
+    print(f'Correlation (WF): {data_analysis.correlation(corr_WF, wes_WF):.3f}')
 
     plt.figure(figsize=(3.5, 4))
     plt.plot(
@@ -790,7 +767,7 @@ def plot_temperature_correlation_skill(model, metric):
     )
     plt.scatter(
         corr_W,
-        skill_W,
+        wes_W,
         label='W',
         marker=MARKERS[0],
         color=get_color(model),
@@ -798,24 +775,24 @@ def plot_temperature_correlation_skill(model, metric):
     )
     plt.scatter(
         corr_WF,
-        skill_WF,
+        wes_WF,
         label='WF',
         marker=MARKERS[1],
         color=get_color(model),
         edgecolors='none',
         alpha=0.5
     )
-    plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+    plt.ylabel(f'$\\mathrm{{WES}}_{{\\mathrm{{{metric}}}}}$')
     plt.xlabel('Temperature corr. [$R^2$]')
     plt.title(model)
-    _complete_plot(f'temperature_correlation_skill_{model}_{metric}', grid=False, legend=False)
+    _complete_plot(f'temperature_correlation_weather_effect_{model}_{metric}', grid=False, legend=False)
 
 
-def get_benchmark_skill_scores(model, metric, no_L3=False):
+def get_benchmark_skill_scores(model, metric, benchmark, no_L3=False):
     results, info = collect_results()
 
     i = info['metrics'].index(metric)
-    lw = info['models'].index('LWR')
+    lw = info['models'].index(benchmark)
     m = info['models'].index(model)
     m_W = info['models'].index(model + '(+W)')
     m_WF = info['models'].index(model + '(+WF)')
@@ -866,8 +843,8 @@ def get_benchmark_skill_scores(model, metric, no_L3=False):
     return skill, skill_W, skill_WF, aggregate_sizes
 
 
-def plot_aggregate_size_benchmark_skill(model, metric):
-    skill, skill_W, skill_WF, aggregate_sizes = get_benchmark_skill_scores(model, metric)
+def plot_aggregate_size_benchmark_skill(model, metric, benchmark='LW'):
+    skill, skill_W, skill_WF, aggregate_sizes = get_benchmark_skill_scores(model, metric, benchmark)
 
     plt.figure(figsize=(3.5, 4))
     plt.plot([1, 2500], [0, 0], color='grey', linestyle='dashed')
@@ -887,20 +864,20 @@ def plot_aggregate_size_benchmark_skill(model, metric):
         marker=MARKERS[1],
         color=get_color(model),
         edgecolors='none',
-        alpha=0.75
-    )
-    plt.scatter(
-        aggregate_sizes,
-        skill_WF,
-        label='WF',
-        marker=MARKERS[2],
-        color=get_color(model),
-        edgecolors='none',
         alpha=0.5
     )
-    plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+    for i in range(len(aggregate_sizes)):
+        plt.plot(
+            [aggregate_sizes[i], aggregate_sizes[i]],
+            [skill[i], skill_W[i]],
+            color=get_color(model),
+            alpha=0.5,
+            linestyle='dotted'
+        )
+    plt.ylabel(f'$\\mathrm{{SS}}_{{\\mathrm{{{metric}}}}}$')
     plt.xlabel('\\# aggregated meters')
-    plt.ylim((-27, 27))
+    # plt.ylim((-16, 28))
+    # plt.ylim((-12, 32))
     plt.xscale('log')
     plt.xticks([1, 10, 100, 1000], ['1', '10', '100', '1000'])
     plt.title(model)
@@ -1241,7 +1218,7 @@ def plot_household_level_weather_effect(
     score = np.mean(score, axis=1)
     score_W = np.mean(score_W, axis=1)
 
-    skill_W = 100 * (1 - score_W / score)
+    wes_W = 100 * (1 - score_W / score)
 
     # Calculate overall percentage improved
     print(f'Percentage improved ({weather}): {100 * np.mean(score_W < score)}')
@@ -1312,18 +1289,18 @@ def plot_household_level_weather_effect(
         plt.plot([min(auto_corr), max(auto_corr)], [0, 0], color='grey', linestyle='dashed')
         plt.scatter(
             auto_corr,
-            skill_W,
+            wes_W,
             color=get_color(model),
             s=1,
             alpha=0.8
         )
-        plt.text(0.94, 0.06, f'corr = {data_analysis.correlation(auto_corr, skill_W):.3f}',
+        plt.text(0.94, 0.06, f'corr = {data_analysis.correlation(auto_corr, wes_W):.3f}',
                  horizontalalignment='right',
                  verticalalignment='bottom',
                  transform=ax.transAxes,
                  fontsize=18,
                  bbox=dict(facecolor='white', edgecolor='grey', boxstyle='round', alpha=0.5))
-        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.ylabel(f'$\\mathrm{{WES}}_{{\\mathrm{{{metric}}}}}$')
         plt.xlabel(f'Autocorrelation (Lag = {lag})')
         plt.title(model)
         _complete_plot(f'household_autocorrelation{lag}_{metric}_{model}_{weather}', legend=False, grid=False)
@@ -1338,27 +1315,27 @@ def plot_household_level_weather_effect(
             y = data_analysis.daily(np.array(data_analysis.get_observations_at(level, cluster, t)), reduce=True)
             var_corr.append(data_analysis.correlation(var, y) ** 2)
 
-        skill_W_50 = skill_W[np.array(var_corr) >= 0.5]
-        print(f'Percentage improved (R2 > 0.5, {var_name.replace("_", " ")}): {100 * np.mean(skill_W_50 > 0):.3f}')
-        print(f'Skill score (R2 > 0.5, {var_name.replace("_", " ")}): {np.mean(skill_W_50):.3f}')
+        wes_W_50 = wes_W[np.array(var_corr) >= 0.5]
+        print(f'Percentage improved (R2 > 0.5, {var_name.replace("_", " ")}): {100 * np.mean(wes_W_50 > 0):.3f}')
+        print(f'Skill score (R2 > 0.5, {var_name.replace("_", " ")}): {np.mean(wes_W_50):.3f}')
 
         f = plt.figure(figsize=(4.5, 4))
         ax = f.add_subplot(111)
         plt.plot([min(var_corr), max(var_corr)], [0, 0], color='grey', linestyle='dashed')
         plt.scatter(
             var_corr,
-            skill_W,
+            wes_W,
             color=get_color(model),
             s=1,
             alpha=0.8
         )
-        plt.text(0.94, 0.06, f'corr = {data_analysis.correlation(var_corr, skill_W):.3f}',
+        plt.text(0.94, 0.06, f'corr = {data_analysis.correlation(var_corr, wes_W):.3f}',
                  horizontalalignment='right',
                  verticalalignment='bottom',
                  transform=ax.transAxes,
                  fontsize=18,
                  bbox=dict(facecolor='white', edgecolor='grey', boxstyle='round', alpha=0.5))
-        plt.ylabel(f'$SS_{{\\mathrm{{{metric}}}}}$')
+        plt.ylabel(f'$\\mathrm{{WES}}_{{\\mathrm{{{metric}}}}}$')
         plt.ylim((-25, 25))
         plt.xlabel(f'Squared {var_name.replace("_", " ")} correlation [$R^2$]')
         plt.title(model)
@@ -1419,8 +1396,8 @@ def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR', 'LWR'), L3=True):
         score_W = np.mean(score_W)
         score_WF = np.mean(score_WF)
 
-        skill_W = 100 * (1 - post_hoc_score_W / score)
-        skill_WF = 100 * (1 - post_hoc_score_WF / score)
+        wes_W = 100 * (1 - post_hoc_score_W / score)
+        wes_WF = 100 * (1 - post_hoc_score_WF / score)
 
         print(model)
         print('======')
@@ -1428,13 +1405,13 @@ def post_hoc_analysis(metric, models=('KF', 'KD-IC', 'DeepAR', 'LWR'), L3=True):
         print()
         print(f'{metric}(W) = {score_W:.2f}')
         print(f'Post-hoc {metric}(W) = {post_hoc_score_W:.2f}')
-        print(f'Post-hoc SS_{metric}(W) = {skill_W:.2f}')
+        print(f'Post-hoc WES_{metric}(W) = {wes_W:.2f}')
         print(f'Percentage_improved(W) = {100 * percentage_better_with_W:.2f}')
         print(f'Consistency_across_forecasts(W): {100 * forecast_consistency_W:.2f}')
         print()
         print(f'{metric}(WF) = {score_WF:.2f}')
         print(f'Post-hoc {metric}(WF) = {post_hoc_score_WF:.2f}')
-        print(f'Post-hoc SS_{metric}(WF) = {skill_WF:.2f}')
+        print(f'Post-hoc WES_{metric}(WF) = {wes_WF:.2f}')
         print(f'Percentage_improved(WF) = {100 * percentage_better_with_WF:.2f}')
         print(f'Consistency_across_forecasts(WF): {100 * forecast_consistency_WF:.2f}')
         print()
