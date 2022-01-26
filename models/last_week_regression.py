@@ -17,7 +17,7 @@ class LastWeekRegression(ForecastModel):
 
         self.use_last_week_feature = True
         self.use_weekday_bias = True
-        self.use_seasonal_features = True
+        self.num_seasonal_terms = 3
         self.weather_polynomial_degree = 2
 
         self.num_features = (
@@ -25,7 +25,7 @@ class LastWeekRegression(ForecastModel):
         ) + (
             7 if self.use_weekday_bias else 1
         ) + (
-            2 if self.use_seasonal_features else 0
+            2 * self.num_seasonal_terms
         ) + (
             (self.weather_polynomial_degree * u.shape[1]) if u is not None else 0
         )
@@ -69,17 +69,16 @@ class LastWeekRegression(ForecastModel):
             feature_count += 1
 
         # Seasonal features
-        if self.use_seasonal_features:
-            seconds = t.map(dt.datetime.timestamp).to_numpy(float)
-            seconds_per_minute = 60
-            minutes_per_hour = 60
-            hours_per_day = 24
-            days_per_year = 365.2425
-            seconds_per_year = seconds_per_minute * minutes_per_hour * hours_per_day * days_per_year
-
-            features[:, feature_count] = np.sin(2 * np.pi * seconds / seconds_per_year)
+        seconds = t.map(dt.datetime.timestamp).to_numpy(float)
+        seconds_per_minute = 60
+        minutes_per_hour = 60
+        hours_per_day = 24
+        days_per_year = 365.2425
+        seconds_per_year = seconds_per_minute * minutes_per_hour * hours_per_day * days_per_year
+        for seasonal_factor in range(1, self.num_seasonal_terms + 1):
+            features[:, feature_count] = np.sin(2 * np.pi * seasonal_factor * seconds / seconds_per_year)
             feature_count += 1
-            features[:, feature_count] = np.cos(2 * np.pi * seconds / seconds_per_year)
+            features[:, feature_count] = np.cos(2 * np.pi * seasonal_factor * seconds / seconds_per_year)
             feature_count += 1
 
         # Weather polynomials
