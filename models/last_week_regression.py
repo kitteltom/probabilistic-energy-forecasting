@@ -17,7 +17,7 @@ class LastWeekRegression(ForecastModel):
 
         self.use_last_week_feature = True
         self.use_weekday_bias = True
-        self.num_seasonal_terms = 3
+        self.num_seasonal_terms = 1
         self.weather_polynomial_degree = 2
 
         self.num_features = (
