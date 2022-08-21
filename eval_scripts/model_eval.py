@@ -923,10 +923,10 @@ def plot_PIT_hist(model, level, cluster):
     plt.figure(figsize=(3.5, 3))
     plt.hist(pit, bins=20, density=True, color=get_color(model), label=model)
     plt.plot([0, 1], [1, 1], color='grey', label='$\\mathcal{U}(0, 1)$', linestyle='dashed')
-    plt.ylim((0, 2.5))
+    plt.ylim((0, 3.14))
     plt.ylabel('Relative frequency')
     plt.xlabel('PIT')
-    plt.title(model)
+    plt.title(f'{model}, {level}')
     _complete_plot(f'PIT_hist_{get_file_name(model, level, cluster)}', grid=False, legend=False)
 
 
@@ -1188,6 +1188,9 @@ def plot_forecast1d(model, level, cluster, number):
     plt.ylabel('Energy [kWh]')
     plt.title(f'{model}, {level}')
     plt.xlabel('Time of day')
+    # plt.ylim((200, 950))
+    # plt.ylim((6, 43))
+    # plt.ylim((-0.03, 0.46))
     ticks = np.array(t[2:S_D:14].map(lambda x: x.strftime('%H:%M')))
     plt.xticks(np.arange(2, S_D, 14), ticks, rotation=0)
     _complete_plot(f'forecast1d_{get_file_name(model, level, cluster)}_number{number}', legend=False, grid=False)
